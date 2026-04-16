@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}首页 - xiaoda报税{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>季度报税记录</h2>
+    <a href="{{ url_for('tax.new_report') }}" class="btn btn-primary">+ 新建季度</a>
+</div>
+
+{% if reports %}
+<div class="row">
+    {% for r in reports %}
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ r.year }}年 第{{ r.quarter }}季度</h5>
+                <span class="badge {% if r.status == 'submitted' %}bg-success{% else %}bg-secondary{% endif %}">
+                    {{ '已申报' if r.status == 'submitted' else '草稿' }}
+                </span>
+                <hr>
+                <p class="mb-1">营业收入: ¥{{ "%.2f"|format(r.income_total) }}</p>
+                <p class="mb-1">应缴税费: <span class="tax-total">¥{{ "%.2f"|format(r.tax_total) }}</span></p>
+                <div class="mt-3">
+                    <a href="{{ url_for('tax.edit_report', report_id=r.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+                    <a href="{{ url_for('tax.download_pdf', report_id=r.id) }}" class="btn btn-sm btn-outline-success">下载PDF</a>
+                    <form method="post" action="{{ url_for('tax.delete_report', report_id=r.id) }}" class="d-inline" onsubmit="return confirm('确定删除？')">
+                        <button class="btn btn-sm btn-outline-danger">删除</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <h4>暂无报税记录</h4>
+    <p>点击「新建季度」开始</p>
+</div>
+{% endif %}
+{% endblock %}

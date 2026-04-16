@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}{{ report.year }}Q{{ report.quarter }} - xiaoda报税{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>{{ report.year }}年 第{{ report.quarter }}季度</h3>
+    <div>
+        <a href="{{ url_for('tax.download_pdf', report_id=report.id) }}" class="btn btn-success btn-sm">下载PDF</a>
+        <a href="{{ url_for('main.index') }}" class="btn btn-secondary btn-sm">返回</a>
+    </div>
+</div>
+
+<form method="post">
+<div class="row">
+    <!-- 左栏：收入与增值税 -->
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">增值税（小规模纳税人）</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label">营业收入合计（含税）</label>
+                    <input type="number" step="0.01" name="income_total" class="form-control" value="{{ report.income_total }}">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">其中免税收入</label>
+                    <input type="number" step="0.01" name="income_tax_free" class="form-control" value="{{ report.income_tax_free }}">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">征收率</label>
+                    <select name="vat_rate" class="form-select">
+                        <option value="0.01" {% if report.vat_rate == 0.01 %}selected{% endif %}>1%</option>
+                        <option value="0.03" {% if report.vat_rate == 0.03 %}selected{% endif %}>3%</option>
+                        <option value="0.05" {% if report.vat_rate == 0.05 %}selected{% endif %}>5%</option>
+                    </select>
+                </div>
+                <hr>
+                <p>不含税收入: <strong>¥{{ "%.2f"|format(report.income_taxable) }}</strong></p>
+                <p>应纳增值税: <strong>¥{{ "%.2f"|format(report.vat_amount) }}</strong>
+                    {% if report.vat_exempt %}<span class="badge bg-success">季度≤30万 免征</span>{% endif %}
+                </p>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">附加税</div>
+            <div class="card-body">
+                <p>城建税: ¥{{ "%.2f"|format(report.urban_maintenance_tax) }}</p>
+                <p>教育费附加: ¥{{ "%.2f"|format(report.education_surcharge) }}</p>
+                <p>地方教育附加: ¥{{ "%.2f"|format(report.local_education_surcharge) }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右栏：所得税与汇总 -->
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header bg-warning">企业所得税（季度预缴）</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label">利润总额</label>
+                    <input type="number" step="0.01" name="total_profit" class="form-control" value="{{ report.total_profit }}">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">所得税税率</label>
+                    <select name="income_tax_rate" class="form-select">
+                        <option value="0.05" {% if report.income_tax_rate == 0.05 %}selected{% endif %}>5%（小微优惠）</option>
+                        <option value="0.10" {% if report.income_tax_rate == 0.10 %}selected{% endif %}>10%</option>
+                        <option value="0.25" {% if report.income_tax_rate == 0.25 %}selected{% endif %}>25%（标准）</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">已预缴所得税</label>
+                    <input type="number" step="0.01" name="income_tax_prepaid" class="form-control" value="{{ report.income_tax_prepaid }}">
+                </div>
+                <hr>
+                <p>应纳所得税: <strong>¥{{ "%.2f"|format(report.income_tax_amount) }}</strong></p>
+                <p>本期应补(退): <strong>¥{{ "%.2f"|format(report.income_tax_due) }}</strong></p>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white">其他</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label">印花税</label>
+                    <input type="number" step="0.01" name="stamp_tax" class="form-control" value="{{ report.stamp_tax }}">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">备注</label>
+                    <textarea name="notes" class="form-control" rows="2">{{ report.notes }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3 border-primary">
+            <div class="card-body text-center">
+                <p class="mb-1">本季度应缴税费合计</p>
+                <p class="tax-total">¥{{ "%.2f"|format(report.tax_total) }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<button type="submit" class="btn btn-primary btn-lg w-100 mb-4">保存并计算</button>
+</form>
+
+<!-- 发票明细 -->
+<div class="card mb-4">
+    <div class="card-header bg-dark text-white d-flex justify-content-between">
+        <span>发票明细</span>
+        <button class="btn btn-sm btn-light" data-bs-toggle="collapse" data-bs-target="#invoiceForm">+ 添加发票</button>
+    </div>
+    <div class="collapse" id="invoiceForm">
+        <div class="card-body">
+            <form method="post" action="{{ url_for('tax.add_invoice', report_id=report.id) }}">
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <input type="date" name="date" class="form-control" required>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" name="invoice_no" class="form-control" placeholder="发票号">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" name="buyer" class="form-control" placeholder="购买方">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" step="0.01" name="amount" class="form-control" placeholder="金额" required>
+                    </div>
+                    <div class="col-md-1">
+                        <input type="number" step="0.01" name="tax_amount" class="form-control" placeholder="税额" value="0">
+                    </div>
+                    <div class="col-md-1">
+                        <select name="invoice_type" class="form-select">
+                            <option value="normal">普票</option>
+                            <option value="special">专票</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">添加</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        {% if report.invoices %}
+        <table class="table table-sm mb-0">
+            <thead><tr><th>日期</th><th>发票号</th><th>购买方</th><th>金额</th><th>税额</th><th>类型</th><th></th></tr></thead>
+            <tbody>
+            {% for inv in report.invoices %}
+            <tr>
+                <td>{{ inv.date }}</td>
+                <td>{{ inv.invoice_no }}</td>
+                <td>{{ inv.buyer }}</td>
+                <td>¥{{ "%.2f"|format(inv.amount) }}</td>
+                <td>¥{{ "%.2f"|format(inv.tax_amount) }}</td>
+                <td>{{ '专票' if inv.invoice_type == 'special' else '普票' }}</td>
+                <td>
+                    <form method="post" action="{{ url_for('tax.delete_invoice', invoice_id=inv.id) }}" class="d-inline">
+                        <button class="btn btn-sm btn-outline-danger">删</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted text-center py-3">暂无发票记录</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
