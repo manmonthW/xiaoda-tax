@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}资产负债表 - {{ r.label }}{% endblock %}
+{% block content %}
+<form method="post">
+<div class="card mb-3">
+    <div class="card-header bg-primary text-white d-flex justify-content-between">
+        <span>资产负债表（小企业会计准则）</span>
+        <span>{{ r.label }}</span>
+    </div>
+    <div class="card-body p-2">
+        <div class="row mb-2">
+            <div class="col-md-6">
+                <label class="form-label">纳税人识别号</label>
+                <input type="text" name="taxpayer_id" class="form-control form-control-sm" value="{{ r.taxpayer_id }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">纳税人名称</label>
+                <input type="text" name="taxpayer_name" class="form-control form-control-sm" value="{{ r.taxpayer_name }}">
+            </div>
+        </div>
+
+        <div class="row">
+        <!-- 左栏：资产 -->
+        <div class="col-md-6">
+        <table class="table table-bordered table-sm mb-0">
+            <thead class="table-primary">
+                <tr><th>资产</th><th>行次</th><th>期末余额</th><th>年初余额</th></tr>
+            </thead>
+            <tbody>
+                <tr class="section-header"><td colspan="4">流动资产：</td></tr>
+                {% set asset_items = [
+                    ("货币资金", "a1", 1),
+                    ("短期投资", "a2", 2),
+                    ("应收票据", "a3", 3),
+                    ("应收账款", "a4", 4),
+                    ("预付账款", "a5", 5),
+                    ("应收股利", "a6", 6),
+                    ("应收利息", "a7", 7),
+                    ("其他应收款", "a8", 8),
+                    ("存货", "a9", 9),
+                ] %}
+                {% for label, key, row in asset_items %}
+                <tr>
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}" class="form-control form-control-sm" value="{{ bs.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}_y" class="form-control form-control-sm" value="{{ bs.get(key+'_y', '') }}"></td>
+                </tr>
+                {% endfor %}
+                <tr class="help-text">
+                    <td class="ps-3">其中：原材料</td><td>10</td>
+                    <td><input type="number" step="0.01" name="bs_a10" class="form-control form-control-sm" value="{{ bs.get('a10', '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_a10_y" class="form-control form-control-sm" value="{{ bs.get('a10_y', '') }}"></td>
+                </tr>
+                <tr class="help-text">
+                    <td class="ps-4">在产品</td><td>11</td>
+                    <td><input type="number" step="0.01" name="bs_a11" class="form-control form-control-sm" value="{{ bs.get('a11', '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_a11_y" class="form-control form-control-sm" value="{{ bs.get('a11_y', '') }}"></td>
+                </tr>
+                <tr class="help-text">
+                    <td class="ps-4">库存商品</td><td>12</td>
+                    <td><input type="number" step="0.01" name="bs_a12" class="form-control form-control-sm" value="{{ bs.get('a12', '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_a12_y" class="form-control form-control-sm" value="{{ bs.get('a12_y', '') }}"></td>
+                </tr>
+                <tr class="help-text">
+                    <td class="ps-4">周转材料</td><td>13</td>
+                    <td><input type="number" step="0.01" name="bs_a13" class="form-control form-control-sm" value="{{ bs.get('a13', '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_a13_y" class="form-control form-control-sm" value="{{ bs.get('a13_y', '') }}"></td>
+                </tr>
+                <tr>
+                    <td>其他流动资产</td><td>14</td>
+                    <td><input type="number" step="0.01" name="bs_a14" class="form-control form-control-sm" value="{{ bs.get('a14', '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_a14_y" class="form-control form-control-sm" value="{{ bs.get('a14_y', '') }}"></td>
+                </tr>
+                <tr class="calc-row">
+                    <td>流动资产合计</td><td>15</td>
+                    <td>{{ "%.2f"|format(bs.get('a15', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(bs.get('a15_y', 0)|float) }}</td>
+                </tr>
+
+                <tr class="section-header"><td colspan="4">非流动资产：</td></tr>
+                <tr>
+                    <td>长期债券投资</td><td>16</td>
+                    <td><input type="number" step="0.01" name="bs_a16" class="form-control form-control-sm" value="{{ bs.get('a16', '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_a16_y" class="form-control form-control-sm" value="{{ bs.get('a16_y', '') }}"></td>
+                </tr>
+                <tr>
+                    <td>长期股权投资</td><td>17</td>
+                    <td><input type="number" step="0.01" name="bs_a17" class="form-control form-control-sm" value="{{ bs.get('a17', '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_a17_y" class="form-control form-control-sm" value="{{ bs.get('a17_y', '') }}"></td>
+                </tr>
+                <tr>
+                    <td>固定资产原价</td><td>18</td>
+                    <td><input type="number" step="0.01" name="bs_a18" class="form-control form-control-sm" value="{{ bs.get('a18', '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_a18_y" class="form-control form-control-sm" value="{{ bs.get('a18_y', '') }}"></td>
+                </tr>
+                <tr>
+                    <td>减：累计折旧</td><td>19</td>
+                    <td><input type="number" step="0.01" name="bs_a19" class="form-control form-control-sm" value="{{ bs.get('a19', '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_a19_y" class="form-control form-control-sm" value="{{ bs.get('a19_y', '') }}"></td>
+                </tr>
+                <tr class="calc-row">
+                    <td>固定资产账面价值</td><td>20</td>
+                    <td>{{ "%.2f"|format(bs.get('a20', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(bs.get('a20_y', 0)|float) }}</td>
+                </tr>
+                {% set nca_items = [
+                    ("在建工程", "a21", 21),
+                    ("工程物资", "a22", 22),
+                    ("固定资产清理", "a23", 23),
+                    ("生物性生物资产", "a24", 24),
+                    ("无形资产", "a25", 25),
+                    ("开发支出", "a26", 26),
+                    ("长期待摊费用", "a27", 27),
+                    ("其他非流动资产", "a28", 28),
+                ] %}
+                {% for label, key, row in nca_items %}
+                <tr>
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}" class="form-control form-control-sm" value="{{ bs.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}_y" class="form-control form-control-sm" value="{{ bs.get(key+'_y', '') }}"></td>
+                </tr>
+                {% endfor %}
+                <tr class="calc-row">
+                    <td>非流动资产合计</td><td>29</td>
+                    <td>{{ "%.2f"|format(bs.get('a29', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(bs.get('a29_y', 0)|float) }}</td>
+                </tr>
+                <tr class="total-row">
+                    <td>资产合计</td><td>30</td>
+                    <td>{{ "%.2f"|format(bs.get('a30', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(bs.get('a30_y', 0)|float) }}</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+
+        <!-- 右栏：负债和所有者权益 -->
+        <div class="col-md-6">
+        <table class="table table-bordered table-sm mb-0">
+            <thead class="table-primary">
+                <tr><th>负债和所有者权益</th><th>行次</th><th>期末余额</th><th>年初余额</th></tr>
+            </thead>
+            <tbody>
+                <tr class="section-header"><td colspan="4">流动负债：</td></tr>
+                {% set cl_items = [
+                    ("短期借款", "l31", 31),
+                    ("应付票据", "l32", 32),
+                    ("应付账款", "l33", 33),
+                    ("预收账款", "l34", 34),
+                    ("应付职工薪酬", "l35", 35),
+                    ("应交税费", "l36", 36),
+                    ("应付利息", "l37", 37),
+                    ("应付利润", "l38", 38),
+                    ("其他应付款", "l39", 39),
+                    ("其他流动负债", "l40", 40),
+                ] %}
+                {% for label, key, row in cl_items %}
+                <tr>
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}" class="form-control form-control-sm" value="{{ bs.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}_y" class="form-control form-control-sm" value="{{ bs.get(key+'_y', '') }}"></td>
+                </tr>
+                {% endfor %}
+                <tr class="calc-row">
+                    <td>流动负债合计</td><td>41</td>
+                    <td>{{ "%.2f"|format(bs.get('l41', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(bs.get('l41_y', 0)|float) }}</td>
+                </tr>
+
+                <tr class="section-header"><td colspan="4">非流动负债：</td></tr>
+                {% set ncl_items = [
+                    ("长期借款", "l42", 42),
+                    ("长期应付款", "l43", 43),
+                    ("递延收益", "l44", 44),
+                    ("其他非流动负债", "l45", 45),
+                ] %}
+                {% for label, key, row in ncl_items %}
+                <tr>
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}" class="form-control form-control-sm" value="{{ bs.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}_y" class="form-control form-control-sm" value="{{ bs.get(key+'_y', '') }}"></td>
+                </tr>
+                {% endfor %}
+                <tr class="calc-row">
+                    <td>非流动负债合计</td><td>46</td>
+                    <td>{{ "%.2f"|format(bs.get('l46', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(bs.get('l46_y', 0)|float) }}</td>
+                </tr>
+                <tr class="calc-row">
+                    <td>负债合计</td><td>47</td>
+                    <td>{{ "%.2f"|format(bs.get('l47', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(bs.get('l47_y', 0)|float) }}</td>
+                </tr>
+
+                <!-- 空行填充对齐 -->
+                <tr><td colspan="4" style="height:60px"></td></tr>
+
+                <tr class="section-header"><td colspan="4">所有者权益（股东权益）：</td></tr>
+                {% set eq_items = [
+                    ("实收资本（或股本）", "e48", 48),
+                    ("资本公积", "e49", 49),
+                    ("盈余公积", "e50", 50),
+                    ("未分配利润", "e51", 51),
+                ] %}
+                {% for label, key, row in eq_items %}
+                <tr>
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}" class="form-control form-control-sm" value="{{ bs.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="bs_{{ key }}_y" class="form-control form-control-sm" value="{{ bs.get(key+'_y', '') }}"></td>
+                </tr>
+                {% endfor %}
+                <tr class="calc-row">
+                    <td>所有者权益合计</td><td>52</td>
+                    <td>{{ "%.2f"|format(bs.get('e52', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(bs.get('e52_y', 0)|float) }}</td>
+                </tr>
+                <tr class="total-row">
+                    <td>负债和所有者权益总计</td><td>53</td>
+                    <td>{{ "%.2f"|format(bs.get('le53', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(bs.get('le53_y', 0)|float) }}</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        </div>
+
+        <p class="help-text mt-2">提示：蓝色行为自动计算，绿色行为总计。只需填写白色行的数据，保存后自动计算合计。</p>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between mt-3 mb-4">
+    <a href="/" class="btn btn-secondary">返回首页</a>
+    <div>
+        <button type="submit" name="action" value="save" class="btn btn-outline-primary">保存</button>
+        <button type="submit" name="action" value="next" class="btn btn-primary">保存并继续 →</button>
+    </div>
+</div>
+</form>
+{% endblock %}

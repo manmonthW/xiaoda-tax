@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}现金流量表 - {{ r.label }}{% endblock %}
+{% block content %}
+<form method="post">
+<div class="card mb-3">
+    <div class="card-header bg-primary text-white d-flex justify-content-between">
+        <span>现金流量表（小企业会计准则）</span>
+        <span>{{ r.label }} | {{ r.period_start }} ~ {{ r.period_end }}</span>
+    </div>
+    <div class="card-body p-2">
+        <table class="table table-bordered table-sm">
+            <thead class="table-primary">
+                <tr><th style="width:50%">项目</th><th>行次</th><th>本期金额</th><th>本年累计金额</th></tr>
+            </thead>
+            <tbody>
+                <tr class="section-header"><td colspan="4">一、经营活动产生的现金流量：</td></tr>
+                {% set op_items = [
+                    ("销售产成品、商品、提供劳务收到的现金", "c1", 1),
+                    ("收到其他与经营活动有关的现金", "c2", 2),
+                    ("购买原材料、商品、接受劳务支付的现金", "c3", 3),
+                    ("支付的职工薪酬", "c4", 4),
+                    ("支付的税费", "c5", 5),
+                    ("支付其他与经营活动有关的现金", "c6", 6),
+                ] %}
+                {% for label, key, row in op_items %}
+                <tr>
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="cf_{{ key }}" class="form-control form-control-sm" value="{{ cf.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="cf_{{ key }}_acc" class="form-control form-control-sm" value="{{ cf.get(key+'_acc', '') }}"></td>
+                </tr>
+                {% endfor %}
+                <tr class="calc-row">
+                    <td><strong>经营活动产生的现金流量净额</strong></td><td>7</td>
+                    <td>{{ "%.2f"|format(cf.get('c7', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(cf.get('c7_acc', 0)|float) }}</td>
+                </tr>
+
+                <tr class="section-header"><td colspan="4">二、投资活动产生的现金流量：</td></tr>
+                {% set inv_items = [
+                    ("收回短期投资、长期债券投资和长期股权投资收到的现金", "c8", 8),
+                    ("取得投资收益收到的现金", "c9", 9),
+                    ("处置固定资产、无形资产和其他非流动资产收回的现金净额", "c10", 10),
+                    ("短期投资、长期债券投资和长期股权投资支付的现金", "c11", 11),
+                    ("购建固定资产、无形资产和其他非流动资产支付的现金", "c12", 12),
+                ] %}
+                {% for label, key, row in inv_items %}
+                <tr>
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="cf_{{ key }}" class="form-control form-control-sm" value="{{ cf.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="cf_{{ key }}_acc" class="form-control form-control-sm" value="{{ cf.get(key+'_acc', '') }}"></td>
+                </tr>
+                {% endfor %}
+                <tr class="calc-row">
+                    <td><strong>投资活动产生的现金流量净额</strong></td><td>13</td>
+                    <td>{{ "%.2f"|format(cf.get('c13', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(cf.get('c13_acc', 0)|float) }}</td>
+                </tr>
+
+                <tr class="section-header"><td colspan="4">三、筹资活动产生的现金流量：</td></tr>
+                {% set fin_items = [
+                    ("取得借款收到的现金", "c14", 14),
+                    ("吸收投资者投资收到的现金", "c15", 15),
+                    ("偿还借款本金支付的现金", "c16", 16),
+                    ("偿还借款利息支付的现金", "c17", 17),
+                    ("分配利润支付的现金", "c18", 18),
+                ] %}
+                {% for label, key, row in fin_items %}
+                <tr>
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="cf_{{ key }}" class="form-control form-control-sm" value="{{ cf.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="cf_{{ key }}_acc" class="form-control form-control-sm" value="{{ cf.get(key+'_acc', '') }}"></td>
+                </tr>
+                {% endfor %}
+                <tr class="calc-row">
+                    <td><strong>筹资活动产生的现金流量净额</strong></td><td>19</td>
+                    <td>{{ "%.2f"|format(cf.get('c19', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(cf.get('c19_acc', 0)|float) }}</td>
+                </tr>
+
+                <tr class="calc-row">
+                    <td><strong>四、现金净增加额</strong></td><td>20</td>
+                    <td>{{ "%.2f"|format(cf.get('c20', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(cf.get('c20_acc', 0)|float) }}</td>
+                </tr>
+                <tr>
+                    <td>加：期初现金余额</td><td>21</td>
+                    <td><input type="number" step="0.01" name="cf_c21" class="form-control form-control-sm" value="{{ cf.get('c21', '') }}"></td>
+                    <td><input type="number" step="0.01" name="cf_c21_acc" class="form-control form-control-sm" value="{{ cf.get('c21_acc', '') }}"></td>
+                </tr>
+                <tr class="total-row">
+                    <td><strong>五、期末现金余额</strong></td><td>22</td>
+                    <td>{{ "%.2f"|format(cf.get('c22', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(cf.get('c22_acc', 0)|float) }}</td>
+                </tr>
+            </tbody>
+        </table>
+        <p class="help-text">提示：行7 = 行1+2-3-4-5-6 | 行13 = 行8+9+10-11-12 | 行19 = 行14+15-16-17-18 | 行20 = 行7+13+19 | 行22 = 行20+21</p>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between mt-3 mb-4">
+    <a href="{{ url_for('report.edit_is', report_id=r.id) }}" class="btn btn-secondary">← 上一步</a>
+    <div>
+        <button type="submit" name="action" value="save" class="btn btn-outline-primary">保存</button>
+        <button type="submit" name="action" value="next" class="btn btn-primary">保存并继续 →</button>
+    </div>
+</div>
+</form>
+{% endblock %}

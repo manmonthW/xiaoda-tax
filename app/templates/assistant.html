@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}AI 填表助手 - {{ r.label }}{% endblock %}
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-robot"></i> AI 填表助手</h4>
+<p class="text-muted">用自然语言描述你的经营情况，我来告诉你怎么填三张报表。</p>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="post">
+            <div class="mb-3">
+                <label class="form-label fw-bold">描述你的经营情况</label>
+                <textarea name="query" class="form-control" rows="4" placeholder="例如：一季度签了一笔合同70000元，开了普通发票70000，公司年初注册资本金100000元，没有其他收入或支出">{{ query_text }}</textarea>
+            </div>
+            <div class="help-text mb-3">
+                <i class="bi bi-lightbulb"></i> 可以提到：收入/合同金额、成本、注册资本、工资、房租、固定资产、款项是否收到等
+            </div>
+            <button type="submit" name="action" value="analyze" class="btn btn-primary">
+                <i class="bi bi-magic"></i> 分析并给出建议
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if suggestion %}
+<!-- 计算摘要 -->
+<div class="card mb-3">
+    <div class="card-header bg-info text-white"><i class="bi bi-calculator"></i> 计算过程</div>
+    <div class="card-body">
+        <ul class="mb-0">
+        {% for line in suggestion.summary %}
+            <li>{{ line }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 资产负债表建议 -->
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">资产负债表</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>项目</th><th>行次</th><th class="text-end">金额</th></tr></thead>
+                    <tbody>
+                    {% for key, item in suggestion.balance_sheet.items() %}
+                    <tr>
+                        <td>{{ item.label }}</td>
+                        <td>{{ item.row }}</td>
+                        <td class="text-end">¥{{ "{:,.2f}".format(item.value) }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 利润表建议 -->
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">利润表</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>项目</th><th>行次</th><th class="text-end">金额</th></tr></thead>
+                    <tbody>
+                    {% for key, item in suggestion.income_stmt.items() %}
+                    <tr>
+                        <td>
+                            {{ item.label }}
+                            {% if item.note %}<br><small class="text-muted">{{ item.note }}</small>{% endif %}
+                        </td>
+                        <td>{{ item.row }}</td>
+                        <td class="text-end">¥{{ "{:,.2f}".format(item.value) }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 现金流量表建议 -->
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header bg-warning">现金流量表</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>项目</th><th>行次</th><th class="text-end">金额</th></tr></thead>
+                    <tbody>
+                    {% for key, item in suggestion.cashflow_stmt.items() %}
+                    <tr>
+                        <td>{{ item.label }}</td>
+                        <td>{{ item.row }}</td>
+                        <td class="text-end">¥{{ "{:,.2f}".format(item.value) }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 注意事项 -->
+{% if suggestion.notes %}
+<div class="card mb-3">
+    <div class="card-header bg-secondary text-white"><i class="bi bi-info-circle"></i> 注意事项</div>
+    <div class="card-body">
+        <ul class="mb-0">
+        {% for note in suggestion.notes %}
+            <li>{{ note }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+
+<!-- 应用到报表 -->
+<form method="post" class="mb-4">
+    <input type="hidden" name="query" value="{{ query_text }}">
+    <button type="submit" name="action" value="apply" class="btn btn-lg btn-success w-100"
+            onclick="return confirm('将建议数据填入三张报表（原有数据会被覆盖），确认？')">
+        <i class="bi bi-check2-circle"></i> 将以上建议应用到报表
+    </button>
+    <p class="help-text text-center mt-2">应用后请到各报表页面检查确认数据是否正确</p>
+</form>
+{% endif %}
+{% endblock %}

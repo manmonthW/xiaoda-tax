@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}预览导出 - {{ r.label }}{% endblock %}
+{% block content %}
+
+<div class="card mb-3">
+    <div class="card-header bg-success text-white">
+        <strong>{{ r.label }}</strong> | {{ r.taxpayer_name }} | {{ r.period_start }} ~ {{ r.period_end }}
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- 资产负债表摘要 -->
+            <div class="col-md-4">
+                <h6 class="text-primary">资产负债表</h6>
+                <table class="table table-sm table-bordered">
+                    <tr><td>资产合计</td><td class="text-end">{{ "%.2f"|format(bs.get('a30', 0)|float) }}</td></tr>
+                    <tr><td>负债合计</td><td class="text-end">{{ "%.2f"|format(bs.get('l47', 0)|float) }}</td></tr>
+                    <tr><td>所有者权益合计</td><td class="text-end">{{ "%.2f"|format(bs.get('e52', 0)|float) }}</td></tr>
+                    <tr class="{% if (bs.get('a30',0)|float - bs.get('le53',0)|float)|abs > 0.01 %}table-danger{% else %}table-success{% endif %}">
+                        <td>平衡检验</td>
+                        <td class="text-end">
+                            {% if (bs.get('a30',0)|float - bs.get('le53',0)|float)|abs > 0.01 %}
+                            ❌ 不平衡（差额 {{ "%.2f"|format(bs.get('a30',0)|float - bs.get('le53',0)|float) }}）
+                            {% else %}
+                            ✅ 资产=负债+权益
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- 利润表摘要 -->
+            <div class="col-md-4">
+                <h6 class="text-primary">利润表</h6>
+                <table class="table table-sm table-bordered">
+                    <tr><td>营业收入</td><td class="text-end">{{ "%.2f"|format(ist.get('r1', 0)|float) }}</td></tr>
+                    <tr><td>营业利润</td><td class="text-end">{{ "%.2f"|format(ist.get('r21', 0)|float) }}</td></tr>
+                    <tr><td>利润总额</td><td class="text-end">{{ "%.2f"|format(ist.get('r30', 0)|float) }}</td></tr>
+                    <tr><td>净利润</td><td class="text-end">{{ "%.2f"|format(ist.get('r32', 0)|float) }}</td></tr>
+                </table>
+            </div>
+
+            <!-- 现金流量表摘要 -->
+            <div class="col-md-4">
+                <h6 class="text-primary">现金流量表</h6>
+                <table class="table table-sm table-bordered">
+                    <tr><td>经营活动净额</td><td class="text-end">{{ "%.2f"|format(cf.get('c7', 0)|float) }}</td></tr>
+                    <tr><td>投资活动净额</td><td class="text-end">{{ "%.2f"|format(cf.get('c13', 0)|float) }}</td></tr>
+                    <tr><td>筹资活动净额</td><td class="text-end">{{ "%.2f"|format(cf.get('c19', 0)|float) }}</td></tr>
+                    <tr><td>期末现金余额</td><td class="text-end">{{ "%.2f"|format(cf.get('c22', 0)|float) }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between mb-4">
+    <a href="{{ url_for('report.edit_cf', report_id=r.id) }}" class="btn btn-secondary">← 返回修改</a>
+    <div>
+        <a href="{{ url_for('report.edit_bs', report_id=r.id) }}" class="btn btn-outline-primary">编辑资产负债表</a>
+        <a href="{{ url_for('report.edit_is', report_id=r.id) }}" class="btn btn-outline-primary">编辑利润表</a>
+        <a href="{{ url_for('report.export', report_id=r.id) }}" class="btn btn-success btn-lg">
+            📥 导出XLS模板文件
+        </a>
+    </div>
+</div>
+{% endblock %}

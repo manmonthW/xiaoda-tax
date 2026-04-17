@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}利润表 - {{ r.label }}{% endblock %}
+{% block content %}
+<form method="post">
+<div class="card mb-3">
+    <div class="card-header bg-primary text-white d-flex justify-content-between">
+        <span>利润表（小企业会计准则）</span>
+        <span>{{ r.label }} | {{ r.period_start }} ~ {{ r.period_end }}</span>
+    </div>
+    <div class="card-body p-2">
+        <table class="table table-bordered table-sm">
+            <thead class="table-primary">
+                <tr><th style="width:45%">项目</th><th>行次</th><th>本期金额</th><th>本年累计金额</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>一、营业收入</strong></td><td>1</td>
+                    <td><input type="number" step="0.01" name="is_r1" class="form-control form-control-sm" value="{{ ist.get('r1', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r1_acc" class="form-control form-control-sm" value="{{ ist.get('r1_acc', '') }}"></td>
+                </tr>
+                <tr>
+                    <td>减：营业成本</td><td>2</td>
+                    <td><input type="number" step="0.01" name="is_r2" class="form-control form-control-sm" value="{{ ist.get('r2', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r2_acc" class="form-control form-control-sm" value="{{ ist.get('r2_acc', '') }}"></td>
+                </tr>
+                <tr>
+                    <td>税金及附加</td><td>3</td>
+                    <td><input type="number" step="0.01" name="is_r3" class="form-control form-control-sm" value="{{ ist.get('r3', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r3_acc" class="form-control form-control-sm" value="{{ ist.get('r3_acc', '') }}"></td>
+                </tr>
+
+                {% set tax_detail = [
+                    ("  其中：消费税", "r4", 4),
+                    ("        营业税", "r5", 5),
+                    ("        城市维护建设税", "r6", 6),
+                    ("        资源税", "r7", 7),
+                    ("        土地增值税", "r8", 8),
+                    ("        城镇土地使用税、房产税、车船税、印花税", "r9", 9),
+                    ("        教育费附加、矿产资源补偿费、排污费", "r10", 10),
+                ] %}
+                {% for label, key, row in tax_detail %}
+                <tr class="help-text">
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="is_{{ key }}" class="form-control form-control-sm" value="{{ ist.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_{{ key }}_acc" class="form-control form-control-sm" value="{{ ist.get(key+'_acc', '') }}"></td>
+                </tr>
+                {% endfor %}
+
+                <tr>
+                    <td>销售费用</td><td>11</td>
+                    <td><input type="number" step="0.01" name="is_r11" class="form-control form-control-sm" value="{{ ist.get('r11', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r11_acc" class="form-control form-control-sm" value="{{ ist.get('r11_acc', '') }}"></td>
+                </tr>
+                {% set sell_detail = [
+                    ("  其中：商品维修费", "r12", 12),
+                    ("        广告费和业务宣传费", "r13", 13),
+                ] %}
+                {% for label, key, row in sell_detail %}
+                <tr class="help-text">
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="is_{{ key }}" class="form-control form-control-sm" value="{{ ist.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_{{ key }}_acc" class="form-control form-control-sm" value="{{ ist.get(key+'_acc', '') }}"></td>
+                </tr>
+                {% endfor %}
+
+                <tr>
+                    <td>管理费用</td><td>14</td>
+                    <td><input type="number" step="0.01" name="is_r14" class="form-control form-control-sm" value="{{ ist.get('r14', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r14_acc" class="form-control form-control-sm" value="{{ ist.get('r14_acc', '') }}"></td>
+                </tr>
+                {% set mgmt_detail = [
+                    ("  其中：开办费", "r15", 15),
+                    ("        业务招待费", "r16", 16),
+                    ("        研究费用", "r17", 17),
+                ] %}
+                {% for label, key, row in mgmt_detail %}
+                <tr class="help-text">
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="is_{{ key }}" class="form-control form-control-sm" value="{{ ist.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_{{ key }}_acc" class="form-control form-control-sm" value="{{ ist.get(key+'_acc', '') }}"></td>
+                </tr>
+                {% endfor %}
+
+                <tr>
+                    <td>财务费用</td><td>18</td>
+                    <td><input type="number" step="0.01" name="is_r18" class="form-control form-control-sm" value="{{ ist.get('r18', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r18_acc" class="form-control form-control-sm" value="{{ ist.get('r18_acc', '') }}"></td>
+                </tr>
+                <tr class="help-text">
+                    <td>  其中：利息费用（收入以"-"号填列）</td><td>19</td>
+                    <td><input type="number" step="0.01" name="is_r19" class="form-control form-control-sm" value="{{ ist.get('r19', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r19_acc" class="form-control form-control-sm" value="{{ ist.get('r19_acc', '') }}"></td>
+                </tr>
+
+                <tr>
+                    <td>加：投资收益（损失以"-"号填列）</td><td>20</td>
+                    <td><input type="number" step="0.01" name="is_r20" class="form-control form-control-sm" value="{{ ist.get('r20', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r20_acc" class="form-control form-control-sm" value="{{ ist.get('r20_acc', '') }}"></td>
+                </tr>
+
+                <tr class="calc-row">
+                    <td><strong>二、营业利润（亏损以"-"号填列）</strong></td><td>21</td>
+                    <td>{{ "%.2f"|format(ist.get('r21', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(ist.get('r21_acc', 0)|float) }}</td>
+                </tr>
+
+                <tr>
+                    <td>加：营业外收入</td><td>22</td>
+                    <td><input type="number" step="0.01" name="is_r22" class="form-control form-control-sm" value="{{ ist.get('r22', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r22_acc" class="form-control form-control-sm" value="{{ ist.get('r22_acc', '') }}"></td>
+                </tr>
+                <tr class="help-text">
+                    <td>    其中：政府补助</td><td>23</td>
+                    <td><input type="number" step="0.01" name="is_r23" class="form-control form-control-sm" value="{{ ist.get('r23', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r23_acc" class="form-control form-control-sm" value="{{ ist.get('r23_acc', '') }}"></td>
+                </tr>
+
+                <tr>
+                    <td>减：营业外支出</td><td>24</td>
+                    <td><input type="number" step="0.01" name="is_r24" class="form-control form-control-sm" value="{{ ist.get('r24', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r24_acc" class="form-control form-control-sm" value="{{ ist.get('r24_acc', '') }}"></td>
+                </tr>
+                {% set exp_detail = [
+                    ("    其中：坏账损失", "r25", 25),
+                    ("          无法收回的长期债券投资损失", "r26", 26),
+                    ("          无法收回的长期股权投资损失", "r27", 27),
+                    ("          自然灾害等不可抗力因素造成的损失", "r28", 28),
+                    ("          税收滞纳金", "r29", 29),
+                ] %}
+                {% for label, key, row in exp_detail %}
+                <tr class="help-text">
+                    <td>{{ label }}</td><td>{{ row }}</td>
+                    <td><input type="number" step="0.01" name="is_{{ key }}" class="form-control form-control-sm" value="{{ ist.get(key, '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_{{ key }}_acc" class="form-control form-control-sm" value="{{ ist.get(key+'_acc', '') }}"></td>
+                </tr>
+                {% endfor %}
+
+                <tr class="calc-row">
+                    <td><strong>三、利润总额（亏损总额以"-"号填列）</strong></td><td>30</td>
+                    <td>{{ "%.2f"|format(ist.get('r30', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(ist.get('r30_acc', 0)|float) }}</td>
+                </tr>
+
+                <tr>
+                    <td>减：所得税费用</td><td>31</td>
+                    <td><input type="number" step="0.01" name="is_r31" class="form-control form-control-sm" value="{{ ist.get('r31', '') }}"></td>
+                    <td><input type="number" step="0.01" name="is_r31_acc" class="form-control form-control-sm" value="{{ ist.get('r31_acc', '') }}"></td>
+                </tr>
+
+                <tr class="total-row">
+                    <td><strong>四、净利润（净亏损以"-"号填列）</strong></td><td>32</td>
+                    <td>{{ "%.2f"|format(ist.get('r32', 0)|float) }}</td>
+                    <td>{{ "%.2f"|format(ist.get('r32_acc', 0)|float) }}</td>
+                </tr>
+            </tbody>
+        </table>
+        <p class="help-text">提示：行21营业利润 = 行1-2-3-11-14-18+20 | 行30利润总额 = 行21+22-24 | 行32净利润 = 行30-31</p>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between mt-3 mb-4">
+    <a href="{{ url_for('report.edit_bs', report_id=r.id) }}" class="btn btn-secondary">← 上一步</a>
+    <div>
+        <button type="submit" name="action" value="save" class="btn btn-outline-primary">保存</button>
+        <button type="submit" name="action" value="next" class="btn btn-primary">保存并继续 →</button>
+    </div>
+</div>
+</form>
+{% endblock %}

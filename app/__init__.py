@@ -14,9 +14,9 @@ def create_app():
     migrate.init_app(app, db)
 
     from app import models  # noqa: F401
-    from app.routes import main_bp, tax_bp
+    from app.routes import main_bp, report_bp
 
     app.register_blueprint(main_bp)
-    app.register_blueprint(tax_bp, url_prefix="/tax")
+    app.register_blueprint(report_bp, url_prefix="/report")
 
     return app
