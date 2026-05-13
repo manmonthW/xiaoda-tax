@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}自动生成报表{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-file-earmark-spreadsheet"></i> 自动生成报表</h4>
+</div>
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('closing.carry_forward') }}">期末结转</a></li>
+    <li class="nav-item"><a class="nav-link active" href="{{ url_for('closing.generate_report') }}">生成报表</a></li>
+</ul>
+
+<!-- 期间选择 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <label class="form-label mb-0 small">年度</label>
+                <input type="number" name="year" class="form-control form-control-sm" value="{{ preview.year }}" style="width:90px">
+            </div>
+            <div class="col-auto">
+                <label class="form-label mb-0 small">季度</label>
+                <select name="quarter" class="form-select form-select-sm" style="width:90px">
+                    {% for q in range(1,5) %}
+                    <option value="{{ q }}" {{ 'selected' if q == preview.quarter }}>Q{{ q }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 预览</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 预览：资产负债表 -->
+<div class="card mb-3">
+    <div class="card-header bg-light"><strong>资产负债表</strong>（{{ preview.year }}年{{ preview.month_start }}~{{ preview.month_end }}月）</div>
+    <div class="card-body p-0">
+        <table class="table table-bordered table-sm mb-0">
+            <thead class="table-light">
+                <tr><th>项目</th><th class="text-end">期末余额</th></tr>
+            </thead>
+            <tbody>
+                {% set bs = preview.bs %}
+                <tr><td>货币资金</td><td class="text-end">{{ '%.2f'|format(bs.get('a1', 0)) }}</td></tr>
+                <tr><td>应收账款</td><td class="text-end">{{ '%.2f'|format(bs.get('a4', 0)) }}</td></tr>
+                <tr class="calc-row"><td>流动资产合计</td><td class="text-end">{{ '%.2f'|format(bs.get('a15', 0)) }}</td></tr>
+                <tr><td>固定资产原价</td><td class="text-end">{{ '%.2f'|format(bs.get('a18', 0)) }}</td></tr>
+                <tr><td>累计折旧</td><td class="text-end">{{ '%.2f'|format(bs.get('a19', 0)) }}</td></tr>
+                <tr class="calc-row"><td>非流动资产合计</td><td class="text-end">{{ '%.2f'|format(bs.get('a29', 0)) }}</td></tr>
+                <tr class="total-row"><td>资产合计</td><td class="text-end">{{ '%.2f'|format(bs.get('a30', 0)) }}</td></tr>
+                <tr><td>应付账款</td><td class="text-end">{{ '%.2f'|format(bs.get('l32', 0)) }}</td></tr>
+                <tr><td>应付职工薪酬</td><td class="text-end">{{ '%.2f'|format(bs.get('l34', 0)) }}</td></tr>
+                <tr><td>应交税费</td><td class="text-end">{{ '%.2f'|format(bs.get('l36', 0)) }}</td></tr>
+                <tr class="total-row"><td>负债合计</td><td class="text-end">{{ '%.2f'|format(bs.get('l47', 0)) }}</td></tr>
+                <tr><td>实收资本</td><td class="text-end">{{ '%.2f'|format(bs.get('e48', 0)) }}</td></tr>
+                <tr><td>盈余公积</td><td class="text-end">{{ '%.2f'|format(bs.get('e49', 0)) }}</td></tr>
+                <tr><td>未分配利润</td><td class="text-end">{{ '%.2f'|format(bs.get('e51', 0)) }}</td></tr>
+                <tr class="total-row"><td>所有者权益合计</td><td class="text-end">{{ '%.2f'|format(bs.get('e52', 0)) }}</td></tr>
+                <tr class="total-row"><td>负债和所有者权益合计</td><td class="text-end">{{ '%.2f'|format(bs.get('le53', 0)) }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 预览：利润表 -->
+<div class="card mb-3">
+    <div class="card-header bg-light"><strong>利润表</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-bordered table-sm mb-0">
+            <thead class="table-light">
+                <tr><th>项目</th><th class="text-end">本期金额</th><th class="text-end">本年累计</th></tr>
+            </thead>
+            <tbody>
+                {% set ist = preview.ist %}
+                <tr><td>营业收入</td><td class="text-end">{{ '%.2f'|format(ist.get('r1', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r1_acc', 0)) }}</td></tr>
+                <tr><td>营业成本</td><td class="text-end">{{ '%.2f'|format(ist.get('r2', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r2_acc', 0)) }}</td></tr>
+                <tr><td>管理费用</td><td class="text-end">{{ '%.2f'|format(ist.get('r14', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r14_acc', 0)) }}</td></tr>
+                <tr><td>财务费用</td><td class="text-end">{{ '%.2f'|format(ist.get('r18', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r18_acc', 0)) }}</td></tr>
+                <tr class="calc-row"><td>营业利润</td><td class="text-end">{{ '%.2f'|format(ist.get('r21', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r21_acc', 0)) }}</td></tr>
+                <tr><td>营业外支出</td><td class="text-end">{{ '%.2f'|format(ist.get('r24', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r24_acc', 0)) }}</td></tr>
+                <tr class="calc-row"><td>利润总额</td><td class="text-end">{{ '%.2f'|format(ist.get('r30', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r30_acc', 0)) }}</td></tr>
+                <tr><td>所得税费用</td><td class="text-end">{{ '%.2f'|format(ist.get('r31', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r31_acc', 0)) }}</td></tr>
+                <tr class="total-row"><td>净利润</td><td class="text-end">{{ '%.2f'|format(ist.get('r32', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r32_acc', 0)) }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 预览：现金流量表 -->
+<div class="card mb-3">
+    <div class="card-header bg-light"><strong>现金流量表</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-bordered table-sm mb-0">
+            <thead class="table-light">
+                <tr><th>项目</th><th class="text-end">本期金额</th><th class="text-end">本年累计</th></tr>
+            </thead>
+            <tbody>
+                {% set cf = preview.cf %}
+                <tr><td>销售收到的现金</td><td class="text-end">{{ '%.2f'|format(cf.get('c1', 0)) }}</td><td class="text-end">{{ '%.2f'|format(cf.get('c1_acc', 0)) }}</td></tr>
+                <tr><td>支付的职工薪酬</td><td class="text-end">{{ '%.2f'|format(cf.get('c4', 0)) }}</td><td class="text-end">{{ '%.2f'|format(cf.get('c4_acc', 0)) }}</td></tr>
+                <tr><td>支付的税费</td><td class="text-end">{{ '%.2f'|format(cf.get('c5', 0)) }}</td><td class="text-end">{{ '%.2f'|format(cf.get('c5_acc', 0)) }}</td></tr>
+                <tr><td>支付其他经营活动现金</td><td class="text-end">{{ '%.2f'|format(cf.get('c6', 0)) }}</td><td class="text-end">{{ '%.2f'|format(cf.get('c6_acc', 0)) }}</td></tr>
+                <tr class="calc-row"><td>经营活动现金流量净额</td><td class="text-end">{{ '%.2f'|format(cf.get('c7', 0)) }}</td><td class="text-end">{{ '%.2f'|format(cf.get('c7_acc', 0)) }}</td></tr>
+                <tr><td>期初现金余额</td><td class="text-end">{{ '%.2f'|format(cf.get('c21', 0)) }}</td><td class="text-end">{{ '%.2f'|format(cf.get('c21_acc', 0)) }}</td></tr>
+                <tr class="total-row"><td>期末现金余额</td><td class="text-end">{{ '%.2f'|format(cf.get('c22', 0)) }}</td><td class="text-end">{{ '%.2f'|format(cf.get('c22_acc', 0)) }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<form method="post">
+    <button type="submit" class="btn btn-success btn-lg">
+        <i class="bi bi-file-earmark-plus"></i> 确认生成 {{ preview.year }}年Q{{ preview.quarter }} 报表
+    </button>
+    <span class="text-muted ms-2">生成后可在首页查看、编辑、导出XLS</span>
+</form>
+{% endblock %}

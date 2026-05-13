@@ -71,6 +71,15 @@
             <a class="nav-item {% if active_page == 'home' %}active{% endif %}" href="/" title="首页">
                 <i class="bi bi-house-door"></i><span>首页</span>
             </a>
+            <a class="nav-item {% if active_page in ('voucher_list', 'voucher_new', 'voucher_edit', 'account_list') %}active{% endif %}" href="{{ url_for('voucher.voucher_list') }}" title="记账">
+                <i class="bi bi-journal-text"></i><span>记账</span>
+            </a>
+            <a class="nav-item {% if active_page in ('trial_balance', 'detail_ledger', 'general_ledger') %}active{% endif %}" href="{{ url_for('ledger.trial_balance') }}" title="账簿">
+                <i class="bi bi-clipboard-data"></i><span>账簿</span>
+            </a>
+            <a class="nav-item {% if active_page in ('carry_forward', 'generate_report') %}active{% endif %}" href="{{ url_for('closing.carry_forward') }}" title="期末">
+                <i class="bi bi-arrow-repeat"></i><span>期末</span>
+            </a>
             {% if report_id %}
             <div class="nav-sep"></div>
             <a class="nav-item {% if active_page == 'bs' %}active{% endif %}" href="{{ url_for('report.edit_bs', report_id=report_id) }}" title="资产负债表">

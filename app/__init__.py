@@ -15,8 +15,14 @@ def create_app():
 
     from app import models  # noqa: F401
     from app.routes import main_bp, report_bp
+    from app.voucher_routes import voucher_bp
+    from app.ledger_routes import ledger_bp
+    from app.closing_routes import closing_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(report_bp, url_prefix="/report")
+    app.register_blueprint(voucher_bp, url_prefix="/voucher")
+    app.register_blueprint(ledger_bp, url_prefix="/ledger")
+    app.register_blueprint(closing_bp, url_prefix="/closing")
 
     return app

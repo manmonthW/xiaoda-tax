@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{{ "编辑凭证" if voucher else "新建凭证" }} - 记账{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-pencil-square"></i> {{ "编辑凭证" if voucher else "新建凭证" }}</h4>
+    <a href="{{ url_for('voucher.voucher_list') }}" class="btn btn-outline-secondary btn-sm">返回凭证列表</a>
+</div>
+
+<form method="post" id="voucherForm">
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">凭证编号</label>
+                <input type="text" name="voucher_no" class="form-control" value="{{ voucher_no }}" readonly>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">日期</label>
+                <input type="date" name="voucher_date" class="form-control" value="{{ today }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">摘要</label>
+                <input type="text" name="notes" class="form-control" value="{{ voucher.notes if voucher else '' }}" placeholder="凭证摘要">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">制单人</label>
+                <input type="text" name="preparer" class="form-control" value="{{ voucher.preparer if voucher else '' }}" placeholder="制单人">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-columns"></i> 会计分录</span>
+        <button type="button" class="btn btn-light btn-sm" onclick="addRow()"><i class="bi bi-plus"></i> 添加行</button>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-bordered mb-0" id="itemsTable">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:35%">会计科目</th>
+                    <th style="width:25%">摘要</th>
+                    <th style="width:15%;text-align:right">借方金额</th>
+                    <th style="width:15%;text-align:right">贷方金额</th>
+                    <th style="width:10%;text-align:center">操作</th>
+                </tr>
+            </thead>
+            <tbody id="itemsBody">
+                {% if voucher and voucher.items %}
+                    {% for item in voucher.items %}
+                    <tr>
+                        <td>
+                            <select name="item_{{ loop.index0 }}_account" class="form-select form-select-sm">
+                                <option value="0">-- 选择科目 --</option>
+                                {% for a in accounts %}
+                                <option value="{{ a.id }}" {{ 'selected' if a.id == item.account_id }}>{{ a.code }} {{ a.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td><input type="text" name="item_{{ loop.index0 }}_summary" class="form-control form-control-sm" value="{{ item.summary }}" style="text-align:left"></td>
+                        <td><input type="number" name="item_{{ loop.index0 }}_debit" class="form-control form-control-sm debit-input" value="{{ '%.2f'|format(item.debit_amount) if item.debit_amount else '' }}" step="0.01" min="0" oninput="calcTotal()"></td>
+                        <td><input type="number" name="item_{{ loop.index0 }}_credit" class="form-control form-control-sm credit-input" value="{{ '%.2f'|format(item.credit_amount) if item.credit_amount else '' }}" step="0.01" min="0" oninput="calcTotal()"></td>
+                        <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeRow(this)"><i class="bi bi-trash"></i></button></td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <!-- 默认两行空分录 -->
+                    <tr>
+                        <td>
+                            <select name="item_0_account" class="form-select form-select-sm">
+                                <option value="0">-- 选择科目 --</option>
+                                {% for a in accounts %}
+                                <option value="{{ a.id }}">{{ a.code }} {{ a.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td><input type="text" name="item_0_summary" class="form-control form-control-sm" style="text-align:left"></td>
+                        <td><input type="number" name="item_0_debit" class="form-control form-control-sm debit-input" step="0.01" min="0" oninput="calcTotal()"></td>
+                        <td><input type="number" name="item_0_credit" class="form-control form-control-sm credit-input" step="0.01" min="0" oninput="calcTotal()"></td>
+                        <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeRow(this)"><i class="bi bi-trash"></i></button></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <select name="item_1_account" class="form-select form-select-sm">
+                                <option value="0">-- 选择科目 --</option>
+                                {% for a in accounts %}
+                                <option value="{{ a.id }}">{{ a.code }} {{ a.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td><input type="text" name="item_1_summary" class="form-control form-control-sm" style="text-align:left"></td>
+                        <td><input type="number" name="item_1_debit" class="form-control form-control-sm debit-input" step="0.01" min="0" oninput="calcTotal()"></td>
+                        <td><input type="number" name="item_1_credit" class="form-control form-control-sm credit-input" step="0.01" min="0" oninput="calcTotal()"></td>
+                        <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeRow(this)"><i class="bi bi-trash"></i></button></td>
+                    </tr>
+                {% endif %}
+            </tbody>
+            <tfoot class="table-light">
+                <tr>
+                    <td colspan="2" class="text-end fw-bold">合 计</td>
+                    <td class="text-end fw-bold" id="totalDebit">0.00</td>
+                    <td class="text-end fw-bold" id="totalCredit">0.00</td>
+                    <td class="text-center" id="balanceStatus">—</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<div class="mt-3 d-flex gap-2">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> 保存凭证</button>
+    <a href="{{ url_for('voucher.voucher_list') }}" class="btn btn-outline-secondary">取消</a>
+</div>
+</form>
+
+<!-- 隐藏的科目选项模板 -->
+<template id="accountOptions">
+    <option value="0">-- 选择科目 --</option>
+    {% for a in accounts %}
+    <option value="{{ a.id }}">{{ a.code }} {{ a.name }}</option>
+    {% endfor %}
+</template>
+
+<script>
+let rowIndex = {{ (voucher.items|length) if voucher and voucher.items else 2 }};
+
+function addRow() {
+    const tbody = document.getElementById('itemsBody');
+    const tpl = document.getElementById('accountOptions');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><select name="item_${rowIndex}_account" class="form-select form-select-sm">${tpl.innerHTML}</select></td>
+        <td><input type="text" name="item_${rowIndex}_summary" class="form-control form-control-sm" style="text-align:left"></td>
+        <td><input type="number" name="item_${rowIndex}_debit" class="form-control form-control-sm debit-input" step="0.01" min="0" oninput="calcTotal()"></td>
+        <td><input type="number" name="item_${rowIndex}_credit" class="form-control form-control-sm credit-input" step="0.01" min="0" oninput="calcTotal()"></td>
+        <td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm" onclick="removeRow(this)"><i class="bi bi-trash"></i></button></td>
+    `;
+    tbody.appendChild(tr);
+    rowIndex++;
+}
+
+function removeRow(btn) {
+    const tbody = document.getElementById('itemsBody');
+    if (tbody.rows.length <= 1) { alert('至少保留一行分录'); return; }
+    btn.closest('tr').remove();
+    reindex();
+    calcTotal();
+}
+
+function reindex() {
+    const rows = document.getElementById('itemsBody').rows;
+    for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i].cells;
+        cells[0].querySelector('select').name = `item_${i}_account`;
+        cells[1].querySelector('input').name = `item_${i}_summary`;
+        cells[2].querySelector('input').name = `item_${i}_debit`;
+        cells[3].querySelector('input').name = `item_${i}_credit`;
+    }
+    rowIndex = rows.length;
+}
+
+function calcTotal() {
+    let d = 0, c = 0;
+    document.querySelectorAll('.debit-input').forEach(el => { d += parseFloat(el.value) || 0; });
+    document.querySelectorAll('.credit-input').forEach(el => { c += parseFloat(el.value) || 0; });
+    document.getElementById('totalDebit').textContent = d.toFixed(2);
+    document.getElementById('totalCredit').textContent = c.toFixed(2);
+    const status = document.getElementById('balanceStatus');
+    if (Math.abs(d - c) < 0.005 && d > 0) {
+        status.innerHTML = '<span class="badge bg-success">平衡</span>';
+    } else if (d === 0 && c === 0) {
+        status.textContent = '—';
+    } else {
+        status.innerHTML = '<span class="badge bg-danger">不平衡</span>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', calcTotal);
+</script>
+{% endblock %}
