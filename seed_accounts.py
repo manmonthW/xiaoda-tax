@@ -24,6 +24,7 @@ ACCOUNTS = [
     ("3141",    "利润分配-未分配利润",      "equity",    "credit", None),
     # ── 收入类 ──
     ("5001",    "主营业务收入",            "income",    "credit", None),
+    ("5301",    "营业外收入",              "income",    "credit", None),
     # ── 费用类 ──
     ("5401",    "主营业务成本",            "expense",   "debit",  None),
     ("5602",    "管理费用",                "expense",   "debit",  None),

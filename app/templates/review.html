@@ -2,6 +2,20 @@
 {% block title %}预览导出 - {{ r.label }}{% endblock %}
 {% block content %}
 
+{% if r.is_locked %}
+<div class="alert alert-warning d-flex align-items-center justify-content-between">
+    <div>
+        <i class="bi bi-lock-fill"></i>
+        <strong>报表已锁定（申报口径）</strong>
+        ，不可修改/覆盖/删除。
+        {% if r.locked_at %}<span class="text-muted small">锁定于 {{ r.locked_at.strftime('%Y-%m-%d %H:%M') }}{% if r.locked_by %} · {{ r.locked_by }}{% endif %}</span>{% endif %}
+    </div>
+    <form method="post" action="{{ url_for('report.unlock', report_id=r.id) }}" onsubmit="return confirm('确定解锁 {{ r.label }}？解锁后可再次修改，仅在需要更正时使用。')">
+        <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-unlock"></i> 解锁</button>
+    </form>
+</div>
+{% endif %}
+
 <div class="card mb-3">
     <div class="card-header bg-success text-white">
         <strong>{{ r.label }}</strong> | {{ r.taxpayer_name }} | {{ r.period_start }} ~ {{ r.period_end }}
@@ -34,6 +48,7 @@
                 <table class="table table-sm table-bordered">
                     <tr><td>营业收入</td><td class="text-end">{{ "%.2f"|format(ist.get('r1', 0)|float) }}</td></tr>
                     <tr><td>营业利润</td><td class="text-end">{{ "%.2f"|format(ist.get('r21', 0)|float) }}</td></tr>
+                    <tr><td>营业外收入</td><td class="text-end">{{ "%.2f"|format(ist.get('r22', 0)|float) }}</td></tr>
                     <tr><td>利润总额</td><td class="text-end">{{ "%.2f"|format(ist.get('r30', 0)|float) }}</td></tr>
                     <tr><td>净利润</td><td class="text-end">{{ "%.2f"|format(ist.get('r32', 0)|float) }}</td></tr>
                 </table>
@@ -56,11 +71,18 @@
 <div class="d-flex justify-content-between mb-4">
     <a href="{{ url_for('report.edit_cf', report_id=r.id) }}" class="btn btn-secondary">← 返回修改</a>
     <div>
+        {% if not r.is_locked %}
         <a href="{{ url_for('report.edit_bs', report_id=r.id) }}" class="btn btn-outline-primary">编辑资产负债表</a>
         <a href="{{ url_for('report.edit_is', report_id=r.id) }}" class="btn btn-outline-primary">编辑利润表</a>
+        {% endif %}
         <a href="{{ url_for('report.export', report_id=r.id) }}" class="btn btn-success btn-lg">
             📥 导出XLS模板文件
         </a>
+        {% if not r.is_locked %}
+        <form method="post" action="{{ url_for('report.lock', report_id=r.id) }}" class="d-inline" onsubmit="return confirm('确定锁定 {{ r.label }} 为申报口径？锁定后不可修改/覆盖/删除，更正需先解锁。')">
+            <button class="btn btn-warning btn-lg"><i class="bi bi-lock-fill"></i> 锁定报表（用于申报）</button>
+        </form>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

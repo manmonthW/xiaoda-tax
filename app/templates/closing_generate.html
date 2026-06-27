@@ -32,6 +32,29 @@
     </div>
 </div>
 
+<!-- 申报前结账检查清单 -->
+{% if checklist %}
+<div class="card mb-3 {% if has_error %}border-danger{% else %}border-success{% endif %}">
+    <div class="card-header {% if has_error %}bg-danger text-white{% else %}bg-success text-white{% endif %} py-2">
+        <i class="bi bi-clipboard-check"></i> 申报前结账检查
+        {% if has_error %}<span class="badge bg-light text-danger ms-1">有问题待处理</span>
+        {% else %}<span class="badge bg-light text-success ms-1">全部通过</span>{% endif %}
+    </div>
+    <div class="card-body py-2">
+        <ul class="list-unstyled mb-0">
+            {% for c in checklist %}
+            <li class="py-1">
+                {% if c.level == 'error' %}<i class="bi bi-x-circle-fill text-danger"></i>
+                {% elif c.level == 'warn' %}<i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                {% else %}<i class="bi bi-check-circle-fill text-success"></i>{% endif %}
+                <span class="small">{{ c.text }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+
 <!-- 预览：资产负债表 -->
 <div class="card mb-3">
     <div class="card-header bg-light"><strong>资产负债表</strong>（{{ preview.year }}年{{ preview.month_start }}~{{ preview.month_end }}月）</div>
@@ -78,6 +101,7 @@
                 <tr><td>管理费用</td><td class="text-end">{{ '%.2f'|format(ist.get('r14', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r14_acc', 0)) }}</td></tr>
                 <tr><td>财务费用</td><td class="text-end">{{ '%.2f'|format(ist.get('r18', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r18_acc', 0)) }}</td></tr>
                 <tr class="calc-row"><td>营业利润</td><td class="text-end">{{ '%.2f'|format(ist.get('r21', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r21_acc', 0)) }}</td></tr>
+                <tr><td>营业外收入</td><td class="text-end">{{ '%.2f'|format(ist.get('r22', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r22_acc', 0)) }}</td></tr>
                 <tr><td>营业外支出</td><td class="text-end">{{ '%.2f'|format(ist.get('r24', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r24_acc', 0)) }}</td></tr>
                 <tr class="calc-row"><td>利润总额</td><td class="text-end">{{ '%.2f'|format(ist.get('r30', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r30_acc', 0)) }}</td></tr>
                 <tr><td>所得税费用</td><td class="text-end">{{ '%.2f'|format(ist.get('r31', 0)) }}</td><td class="text-end">{{ '%.2f'|format(ist.get('r31_acc', 0)) }}</td></tr>
@@ -110,9 +134,13 @@
 </div>
 
 <form method="post">
-    <button type="submit" class="btn btn-success btn-lg">
+    <button type="submit" class="btn btn-success btn-lg" {% if has_error %}disabled{% endif %}>
         <i class="bi bi-file-earmark-plus"></i> 确认生成 {{ preview.year }}年Q{{ preview.quarter }} 报表
     </button>
+    {% if has_error %}
+    <span class="text-danger ms-2">结账检查未通过，请先处理上方红色提示项。</span>
+    {% else %}
     <span class="text-muted ms-2">生成后可在首页查看、编辑、导出XLS</span>
+    {% endif %}
 </form>
 {% endblock %}

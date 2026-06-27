@@ -19,12 +19,14 @@ def create_app():
     from app.voucher_routes import voucher_bp
     from app.ledger_routes import ledger_bp
     from app.closing_routes import closing_bp
+    from app.bookkeeping_routes import bookkeeping_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(report_bp, url_prefix="/report")
     app.register_blueprint(voucher_bp, url_prefix="/voucher")
     app.register_blueprint(ledger_bp, url_prefix="/ledger")
     app.register_blueprint(closing_bp, url_prefix="/closing")
+    app.register_blueprint(bookkeeping_bp, url_prefix="/ai-bookkeeping")
 
     # Vercel serverless: auto-create tables and seed accounts on cold start
     if os.environ.get("VERCEL", ""):
@@ -58,6 +60,7 @@ def _seed_accounts():
         ("3131", "本年利润", "equity", "credit", None),
         ("3141", "利润分配-未分配利润", "equity", "credit", None),
         ("5001", "主营业务收入", "income", "credit", None),
+        ("5301", "营业外收入", "income", "credit", None),
         ("5401", "主营业务成本", "expense", "debit", None),
         ("5602", "管理费用", "expense", "debit", None),
         ("5602.01", "管理费用-工资", "expense", "debit", "5602"),

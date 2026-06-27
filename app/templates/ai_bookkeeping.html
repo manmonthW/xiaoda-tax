@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}AI 记账{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-robot"></i> AI 记账</h4>
+    <a href="{{ url_for('voucher.voucher_list') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-journal-text"></i> 凭证列表
+    </a>
+</div>
+
+<div class="alert alert-light border small">
+    <i class="bi bi-info-circle text-primary"></i>
+    用一句话描述一笔业务，AI 自动生成<strong>记账凭证草稿</strong>。
+    生成后请<strong>核对无误再勾选保存</strong>；保存为草稿后到「记账」页面点击「记账」过账。
+    <span class="text-muted">（规则引擎，本地运行，不上传任何数据）</span>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-9">
+                <label class="form-label small text-muted mb-1">业务描述</label>
+                <textarea id="bkText" class="form-control" rows="2"
+                          placeholder="例如：6月发放员工工资9000元 / 收到咨询费5万元已到账 / 支付办公室房租3000元 / 缴纳增值税1200元"></textarea>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">记账日期</label>
+                <input type="date" id="bkDate" class="form-control" value="{{ today }}">
+            </div>
+            <div class="col-md-1 d-grid">
+                <button id="bkParseBtn" class="btn btn-primary"><i class="bi bi-magic"></i> 解析</button>
+            </div>
+        </div>
+        <div class="mt-2 d-flex flex-wrap gap-1">
+            <span class="text-muted small me-1">示例：</span>
+            {% for ex in ['6月发放员工工资9000元', '收到咨询费5万元已到账', '支付办公室房租3000元', '缴纳增值税1200元', '收到投资款10万元', '报销差旅费800元'] %}
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 bk-example">{{ ex }}</button>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div id="bkResult"></div>
+
+<form id="bkConfirmForm" method="post" action="{{ url_for('bookkeeping.confirm') }}" class="d-none">
+    <div class="d-flex justify-content-end gap-2 mt-3">
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-check2-circle"></i> 确认保存选中凭证为草稿
+        </button>
+    </div>
+</form>
+
+<script>
+(function () {
+    const parseBtn = document.getElementById('bkParseBtn');
+    const textEl = document.getElementById('bkText');
+    const dateEl = document.getElementById('bkDate');
+    const resultEl = document.getElementById('bkResult');
+    const confirmForm = document.getElementById('bkConfirmForm');
+
+    function money(n) {
+        return Number(n).toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    function confBadge(c) {
+        const pct = Math.round((c || 0) * 100);
+        let cls = 'bg-success';
+        if (pct < 50) cls = 'bg-danger';
+        else if (pct < 75) cls = 'bg-warning text-dark';
+        return `<span class="badge ${cls}">置信度 ${pct}%</span>`;
+    }
+
+    function render(data) {
+        resultEl.innerHTML = '';
+        confirmForm.classList.add('d-none');
+        if (!data.ok) {
+            resultEl.innerHTML = `<div class="alert alert-warning">${data.message || '未能识别业务类型'}</div>`;
+            return;
+        }
+        const cards = data.vouchers.map((v, i) => {
+            const rows = v.entries.map(e => `
+                <tr>
+                    <td class="text-nowrap"><span class="text-muted small">${e.account_code}</span> ${e.account_name}</td>
+                    <td class="small">${e.summary || ''}</td>
+                    <td class="text-end">${e.debit > 0 ? money(e.debit) : ''}</td>
+                    <td class="text-end">${e.credit > 0 ? money(e.credit) : ''}</td>
+                </tr>`).join('');
+            const warns = (v.warnings || []).map(w =>
+                `<div class="small text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> ${w}</div>`).join('');
+            const balBadge = v.balanced
+                ? '<span class="badge bg-success">借贷平衡</span>'
+                : '<span class="badge bg-danger">不平衡</span>';
+            return `
+            <div class="card mb-2 ${v.balanced ? '' : 'border-danger'}">
+                <div class="card-header d-flex align-items-center gap-2 py-2">
+                    <input class="form-check-input mt-0 bk-select" type="checkbox" name="selected" value="${i}" form="bkConfirmForm" ${v.balanced ? 'checked' : ''}>
+                    <strong>${v.scenario}</strong>
+                    <span class="text-muted small">${v.summary} · ${v.date}</span>
+                    <span class="ms-auto d-flex gap-1">${balBadge} ${confBadge(v.confidence)}</span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr><th>科目</th><th>摘要</th><th class="text-end">借方</th><th class="text-end">贷方</th></tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                        <tfoot class="table-light">
+                            <tr><td colspan="2" class="text-end fw-bold">合计</td>
+                                <td class="text-end fw-bold">${money(v.total_debit)}</td>
+                                <td class="text-end fw-bold">${money(v.total_credit)}</td></tr>
+                        </tfoot>
+                    </table>
+                    ${warns ? `<div class="p-2 border-top">${warns}</div>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+        resultEl.innerHTML = `<div class="mb-2 text-muted small">AI 生成 ${data.vouchers.length} 张凭证草稿，请核对后勾选保存：</div>` + cards;
+        confirmForm.classList.remove('d-none');
+    }
+
+    async function doParse() {
+        const text = textEl.value.trim();
+        if (!text) { textEl.focus(); return; }
+        parseBtn.disabled = true;
+        parseBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        try {
+            const fd = new FormData();
+            fd.append('text', text);
+            fd.append('date', dateEl.value);
+            const resp = await fetch('{{ url_for("bookkeeping.parse") }}', {method: 'POST', body: fd});
+            render(await resp.json());
+        } catch (e) {
+            resultEl.innerHTML = `<div class="alert alert-danger">解析失败：${e}</div>`;
+        } finally {
+            parseBtn.disabled = false;
+            parseBtn.innerHTML = '<i class="bi bi-magic"></i> 解析';
+        }
+    }
+
+    parseBtn.addEventListener('click', doParse);
+    textEl.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') doParse();
+    });
+    document.querySelectorAll('.bk-example').forEach(b =>
+        b.addEventListener('click', () => { textEl.value = b.textContent.trim(); doParse(); }));
+
+    confirmForm.addEventListener('submit', e => {
+        if (![...document.querySelectorAll('.bk-select')].some(c => c.checked)) {
+            e.preventDefault();
+            alert('请至少勾选一张凭证再保存。');
+        }
+    });
+})();
+</script>
+{% endblock %}

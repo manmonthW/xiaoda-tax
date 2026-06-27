@@ -33,18 +33,42 @@
                     <td class="text-end">{{ '%.2f'|format(v.total_debit) }}</td>
                     <td class="text-end">{{ '%.2f'|format(v.total_credit) }}</td>
                     <td class="text-center">
-                        {% if v.is_balanced %}
-                            <span class="badge bg-success">平衡</span>
+                        {% if v.status == 'void' %}
+                            <span class="badge bg-secondary">已作废</span>
+                        {% elif v.status == 'reversed' or v.reversal_of_id %}
+                            <span class="badge bg-warning text-dark">红冲凭证</span>
+                        {% elif v.is_reversed %}
+                            <span class="badge bg-secondary">已红冲</span>
+                        {% elif v.status == 'posted' %}
+                            <span class="badge bg-success">已记账</span>
+                        {% elif v.status == 'reviewed' %}
+                            <span class="badge bg-info text-dark">已审核</span>
                         {% else %}
+                            <span class="badge bg-light text-dark border">草稿</span>
+                        {% endif %}
+                        {% if not v.is_balanced %}
                             <span class="badge bg-danger">不平衡</span>
                         {% endif %}
                     </td>
                     <td class="text-center">
                         <div class="d-flex gap-1 justify-content-center">
+                            {% if v.is_editable %}
                             <a href="{{ url_for('voucher.voucher_edit', voucher_id=v.id) }}" class="btn btn-outline-primary btn-sm" title="编辑"><i class="bi bi-pencil"></i></a>
-                            <form method="post" action="{{ url_for('voucher.voucher_delete', voucher_id=v.id) }}" class="d-inline" onsubmit="return confirm('确定删除凭证 {{ v.voucher_no }}？')">
-                                <button class="btn btn-outline-danger btn-sm" title="删除"><i class="bi bi-trash"></i></button>
+                            {% if v.is_balanced %}
+                            <form method="post" action="{{ url_for('voucher.voucher_post', voucher_id=v.id) }}" class="d-inline" onsubmit="return confirm('确认记账凭证 {{ v.voucher_no }}？记账后将不可直接修改。')">
+                                <button class="btn btn-outline-success btn-sm" title="记账（过账）"><i class="bi bi-check2-circle"></i> 记账</button>
                             </form>
+                            {% endif %}
+                            <form method="post" action="{{ url_for('voucher.voucher_void', voucher_id=v.id) }}" class="d-inline" onsubmit="return confirm('确定作废凭证 {{ v.voucher_no }}？作废后保留留痕，不会被删除。')">
+                                <button class="btn btn-outline-secondary btn-sm" title="作废"><i class="bi bi-x-circle"></i></button>
+                            </form>
+                            {% elif v.status == 'posted' and not v.is_reversed %}
+                            <form method="post" action="{{ url_for('voucher.voucher_reverse', voucher_id=v.id) }}" class="d-inline" onsubmit="return confirm('确定红冲凭证 {{ v.voucher_no }}？将生成一张借贷反向的冲销凭证。')">
+                                <button class="btn btn-outline-danger btn-sm" title="红冲"><i class="bi bi-arrow-counterclockwise"></i> 红冲</button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>

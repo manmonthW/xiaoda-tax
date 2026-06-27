@@ -1,9 +1,9 @@
 """期末结转 + 报表自动生成"""
-from datetime import date
+from datetime import date, datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from sqlalchemy import func
 from app import db
-from app.models import Account, Voucher, VoucherItem, FinancialReport
+from app.models import Account, Voucher, VoucherItem, FinancialReport, log_audit
 from app.calc import calc_balance_sheet, calc_income_stmt, calc_cashflow
 
 closing_bp = Blueprint("closing", __name__)
@@ -14,7 +14,9 @@ def _get_account_by_code(code):
 
 
 def _period_sums(year, month_start, month_end):
-    """汇总指定期间各科目的借贷发生额，返回 {account_id: (debit, credit)}"""
+    """汇总指定期间各科目的借贷发生额，返回 {account_id: (debit, credit)}。
+    口径：仅统计「已记账」(posted) 凭证，排除草稿/已作废，保证申报数据准确。
+    （红冲：原凭证与冲销凭证均为 posted，借贷相抵净额为零，无需特殊处理。）"""
     d_start = date(year, month_start, 1)
     if month_end == 12:
         d_end = date(year, 12, 31)
@@ -29,6 +31,7 @@ def _period_sums(year, month_start, month_end):
         )
         .join(Voucher, Voucher.id == VoucherItem.voucher_id)
         .filter(Voucher.voucher_date >= d_start, Voucher.voucher_date < d_end)
+        .filter(Voucher.status == Voucher.STATUS_POSTED)
         .group_by(VoucherItem.account_id)
         .all()
     )
@@ -42,6 +45,145 @@ def _account_balance(acct, sums):
         return round(d - c, 2)
     else:
         return round(c - d, 2)
+
+
+def _sums_before(year):
+    """年初数：本年 1 月 1 日之前所有已记账凭证的累计发生额，返回 {account_id: (debit, credit)}。
+    用于资产负债表「年初余额」=上年末余额。首年无历史数据则为空（年初数=0）。"""
+    d_start = date(year, 1, 1)
+    rows = (
+        db.session.query(
+            VoucherItem.account_id,
+            func.coalesce(func.sum(VoucherItem.debit_amount), 0).label("d"),
+            func.coalesce(func.sum(VoucherItem.credit_amount), 0).label("c"),
+        )
+        .join(Voucher, Voucher.id == VoucherItem.voucher_id)
+        .filter(Voucher.voucher_date < d_start)
+        .filter(Voucher.status == Voucher.STATUS_POSTED)
+        .group_by(VoucherItem.account_id)
+        .all()
+    )
+    return {r.account_id: (r.d, r.c) for r in rows}
+
+
+def _cashflow_for_period(year, month_start, month_end, accounts):
+    """按现金/银行科目的对方科目，推算一段期间的经营现金流。
+    返回 dict: {in, salary, tax, other}。仅统计已记账凭证。"""
+    d_start = date(year, month_start, 1)
+    d_end = date(year, 12, 31) if month_end == 12 else date(year, month_end + 1, 1)
+
+    cash_acct_ids = {accounts[c].id for c in ("1001", "1002") if accounts.get(c)}
+    result = {"in": 0.0, "salary": 0.0, "tax": 0.0, "other": 0.0}
+    if not cash_acct_ids:
+        return result
+
+    salary_acct = accounts.get("2211")
+    tax_accts = {accounts[c].id for c in ("2221", "2221.01", "2221.02", "2221.03")
+                 if accounts.get(c)}
+
+    vouchers = (
+        Voucher.query
+        .join(VoucherItem)
+        .filter(VoucherItem.account_id.in_(cash_acct_ids))
+        .filter(Voucher.voucher_date >= d_start, Voucher.voucher_date < d_end)
+        .filter(Voucher.status == Voucher.STATUS_POSTED)
+        .distinct()
+        .all()
+    )
+    for v in vouchers:
+        cash_debit = sum((i.debit_amount for i in v.items
+                          if i.account_id in cash_acct_ids), 0)
+        cash_credit = sum((i.credit_amount for i in v.items
+                           if i.account_id in cash_acct_ids), 0)
+        other_ids = {i.account_id for i in v.items if i.account_id not in cash_acct_ids}
+        if cash_debit > 0:
+            result["in"] += float(cash_debit)
+        if cash_credit > 0:
+            if salary_acct and salary_acct.id in other_ids:
+                result["salary"] += float(cash_credit)
+            elif tax_accts & other_ids:
+                result["tax"] += float(cash_credit)
+            else:
+                result["other"] += float(cash_credit)
+    return result
+
+
+def _filing_checklist(year, quarter):
+    """申报前结账检查清单：返回 (checks, has_error)。
+    checks: [{level: 'error'|'warn'|'ok', text: str}]
+    任何 error 都应阻止正式生成报表，避免报出不准确的申报数据。"""
+    month_start = (quarter - 1) * 3 + 1
+    month_end = quarter * 3
+    d_start = date(year, month_start, 1)
+    d_end = date(year, 12, 31) if month_end == 12 else date(year, month_end + 1, 1)
+
+    checks = []
+    has_error = False
+
+    q_vouchers = (
+        Voucher.query
+        .filter(Voucher.voucher_date >= d_start, Voucher.voucher_date < d_end)
+        .all()
+    )
+
+    # 1) 未过账凭证（草稿/已审核）不计入报表
+    unposted = [v for v in q_vouchers
+                if v.status in (Voucher.STATUS_DRAFT, Voucher.STATUS_REVIEWED)]
+    if unposted:
+        has_error = True
+        nos = "、".join(v.voucher_no for v in unposted[:8])
+        more = f" 等{len(unposted)}张" if len(unposted) > 8 else ""
+        checks.append({"level": "error",
+                       "text": f"有 {len(unposted)} 张凭证未记账（{nos}{more}），"
+                               f"不会计入报表。请先到「记账」页面过账或作废。"})
+    else:
+        checks.append({"level": "ok", "text": "本季所有凭证均已记账或作废。"})
+
+    # 2) 已记账凭证借贷平衡
+    unbalanced = [v for v in q_vouchers
+                  if v.status == Voucher.STATUS_POSTED and not v.is_balanced]
+    if unbalanced:
+        has_error = True
+        nos = "、".join(v.voucher_no for v in unbalanced[:8])
+        checks.append({"level": "error",
+                       "text": f"有 {len(unbalanced)} 张已记账凭证借贷不平衡（{nos}），"
+                               f"请红冲更正后再生成报表。"})
+    else:
+        checks.append({"level": "ok", "text": "已记账凭证全部借贷平衡。"})
+
+    # 3) 各有损益发生额的月份是否均已期末结转
+    accounts = {a.id: a for a in Account.query.all()}
+    missing_carry = []
+    for m in range(month_start, month_end + 1):
+        msums = _period_sums(year, m, m)
+        has_pl = any(
+            accounts.get(aid) and accounts[aid].category in ("income", "expense")
+            and (d > 0.005 or c > 0.005)
+            for aid, (d, c) in msums.items()
+        )
+        if not has_pl:
+            continue
+        carry_no = f"转-{year}-{m:02d}"
+        if not Voucher.query.filter_by(voucher_no=carry_no).first():
+            missing_carry.append(m)
+    if missing_carry:
+        has_error = True
+        months = "、".join(f"{m}月" for m in missing_carry)
+        checks.append({"level": "error",
+                       "text": f"{months} 有损益发生但尚未期末结转，"
+                               f"资产负债表「未分配利润」将不准确。请先到「期末结转」完成结转。"})
+    else:
+        checks.append({"level": "ok", "text": "本季各月损益均已结转。"})
+
+    # 4) 期间是否有已记账业务
+    posted_cnt = sum(1 for v in q_vouchers if v.status == Voucher.STATUS_POSTED)
+    if posted_cnt == 0:
+        checks.append({"level": "warn",
+                       "text": "本季没有任何已记账凭证，生成的报表将为空。"})
+    else:
+        checks.append({"level": "ok", "text": f"本季共 {posted_cnt} 张已记账凭证纳入报表。"})
+
+    return checks, has_error
 
 
 # ────────────────────────────────────────────────────────
@@ -114,13 +256,16 @@ def carry_forward():
             voucher_date=date(year, month, 28) if month != 2 else date(year, 2, 28),
             notes=f"{year}年{month}月期末损益结转",
             preparer="系统自动",
+            status=Voucher.STATUS_POSTED,
+            posted_at=datetime.now(),
+            source=Voucher.SOURCE_SYSTEM,
         )
         db.session.add(v)
         db.session.flush()
 
         sort = 0
-        profit_debit = 0.0
-        profit_credit = 0.0
+        profit_debit = 0
+        profit_credit = 0
 
         for item in items_to_close:
             acct = item["account"]
@@ -154,6 +299,9 @@ def carry_forward():
         )
         db.session.add(vi_profit)
 
+        log_audit("voucher", v.id, "carry_forward", "系统自动",
+                  {"voucher_no": carry_no, "period": f"{year}-{month:02d}",
+                   "net_profit": net_profit})
         db.session.commit()
         flash(f"已生成结转凭证 {carry_no}，净利润 ¥{net_profit:,.2f}", "success")
         return redirect(url_for("closing.carry_forward", year=year, month=month))
@@ -178,20 +326,33 @@ def generate_report():
     month_start = (quarter - 1) * 3 + 1
     month_end = quarter * 3
 
+    # 申报前结账检查
+    checklist, has_error = _filing_checklist(year, quarter)
+
     # 计算期间发生额
     sums = _period_sums(year, month_start, month_end)
     # 年初至今累计
     sums_ytd = _period_sums(year, 1, month_end)
+    # 年初余额（上年末数）
+    sums_year_begin = _sums_before(year)
+
+    # 截至期末的全部累计发生额（含年初余额）：用于资产负债表期末余额
+    # 资产负债表是时点报表，期末余额 = 上年末累计 + 本年累计发生额
+    sums_full = {}
+    for src in (sums_year_begin, sums_ytd):
+        for aid, (d, c) in src.items():
+            pd, pc = sums_full.get(aid, (0, 0))
+            sums_full[aid] = (pd + d, pc + c)
 
     accounts = {a.code: a for a in Account.query.all()}
     acct_by_id = {a.id: a for a in Account.query.all()}
 
     def bal(code, use_sums=None):
-        """获取科目余额"""
+        """获取科目期末余额（默认含年初余额的累计口径）"""
         acct = accounts.get(code)
         if not acct:
             return 0
-        s = use_sums or sums_ytd
+        s = use_sums or sums_full
         return _account_balance(acct, s)
 
     def debit_sum(code, use_sums=None):
@@ -212,6 +373,13 @@ def generate_report():
         d, c = s.get(acct.id, (0, 0))
         return round(c, 2)
 
+    def bal_y(code):
+        """科目年初余额（上年末数）"""
+        acct = accounts.get(code)
+        if not acct:
+            return 0
+        return _account_balance(acct, sums_year_begin)
+
     # ── 资产负债表 ──
     bs = {}
     # 资产类（期末余额）
@@ -228,9 +396,17 @@ def generate_report():
     bs["e49"] = bal("3101")                                    # 盈余公积
     bs["e51"] = bal("3131") + bal("3141")                      # 未分配利润 = 本年利润 + 利润分配
 
-    # 年初数（简化处理：如果是Q1则年初=0，否则从上一期报表读取或设0）
-    for k in list(bs.keys()):
-        bs[k + "_y"] = 0  # 年初数默认0（后续可从上期报表读取）
+    # 年初数（上年末余额；首年无历史数据则自然为 0）
+    bs["a1_y"] = bal_y("1001") + bal_y("1002")
+    bs["a4_y"] = bal_y("1122")
+    bs["a18_y"] = bal_y("1401")
+    bs["a19_y"] = bal_y("1602")
+    bs["l32_y"] = bal_y("2202")
+    bs["l34_y"] = bal_y("2211")
+    bs["l36_y"] = bal_y("2221") + bal_y("2221.01") + bal_y("2221.02") + bal_y("2221.03")
+    bs["e48_y"] = bal_y("3001")
+    bs["e49_y"] = bal_y("3101")
+    bs["e51_y"] = bal_y("3131") + bal_y("3141")
 
     bs = calc_balance_sheet(bs)
 
@@ -241,6 +417,7 @@ def generate_report():
     ist["r2"] = debit_sum("5401", sums)                        # 营业成本
     ist["r14"] = debit_sum("5602", sums) + debit_sum("5602.01", sums) + debit_sum("5602.02", sums) + debit_sum("5602.03", sums) + debit_sum("5602.04", sums)  # 管理费用
     ist["r18"] = debit_sum("5603", sums)                       # 财务费用
+    ist["r22"] = credit_sum("5301", sums)                      # 营业外收入（含小规模增值税减免计入）
     ist["r24"] = debit_sum("5711", sums)                       # 营业外支出
     ist["r31"] = debit_sum("2221.03", sums)                    # 所得税费用
 
@@ -249,80 +426,38 @@ def generate_report():
     ist["r2_acc"] = debit_sum("5401", sums_ytd)
     ist["r14_acc"] = debit_sum("5602", sums_ytd) + debit_sum("5602.01", sums_ytd) + debit_sum("5602.02", sums_ytd) + debit_sum("5602.03", sums_ytd) + debit_sum("5602.04", sums_ytd)
     ist["r18_acc"] = debit_sum("5603", sums_ytd)
+    ist["r22_acc"] = credit_sum("5301", sums_ytd)             # 营业外收入累计
     ist["r24_acc"] = debit_sum("5711", sums_ytd)
     ist["r31_acc"] = debit_sum("2221.03", sums_ytd)
 
     ist = calc_income_stmt(ist)
 
-    # ── 现金流量表（简化：从银行存款+库存现金的对方科目推算）──
+    # ── 现金流量表（按现金/银行科目的对方科目推算经营现金流）──
     cf = {}
-    # 简化处理：直接从科目发生额映射
-    cf["c1"] = credit_sum("1122", sums) + debit_sum("1002", sums) + debit_sum("1001", sums)  # 近似：银行存款借方（收入相关）
-    # 更精确的方法需要分析每笔凭证的对方科目，这里用简化版
-    # 收到的现金 ≈ 收入科目的贷方（含税）
-    cash_in = 0
-    cash_out_salary = 0
-    cash_out_tax = 0
-    cash_out_other = 0
+    # 本期（当季）
+    q_cf = _cashflow_for_period(year, month_start, month_end, accounts)
+    cf["c1"] = round(q_cf["in"], 2)                             # 销售收到的现金
+    cf["c4"] = round(q_cf["salary"], 2)                         # 支付职工薪酬
+    cf["c5"] = round(q_cf["tax"], 2)                            # 支付税费
+    cf["c6"] = round(q_cf["other"], 2)                          # 支付其他经营活动现金
 
-    # 遍历当期凭证精确计算现金流
-    d_start = date(year, month_start, 1)
-    d_end = date(year, month_end + 1, 1) if month_end < 12 else date(year, 12, 31)
-    cash_acct_ids = set()
-    for code in ["1001", "1002"]:
-        a = accounts.get(code)
-        if a:
-            cash_acct_ids.add(a.id)
+    # 本年累计（年初至本季末）
+    ytd_cf = _cashflow_for_period(year, 1, month_end, accounts)
+    cf["c1_acc"] = round(ytd_cf["in"], 2)
+    cf["c4_acc"] = round(ytd_cf["salary"], 2)
+    cf["c5_acc"] = round(ytd_cf["tax"], 2)
+    cf["c6_acc"] = round(ytd_cf["other"], 2)
 
-    if cash_acct_ids:
-        # 找所有涉及现金/银行的凭证
-        vouchers = (
-            Voucher.query
-            .join(VoucherItem)
-            .filter(VoucherItem.account_id.in_(cash_acct_ids))
-            .filter(Voucher.voucher_date >= d_start)
-            .filter(Voucher.voucher_date < d_end)
-            .all()
-        )
-        salary_acct = accounts.get("2211")
-        tax_accts = {accounts.get(c).id for c in ["2221", "2221.01", "2221.02", "2221.03"] if accounts.get(c)}
-        income_acct = accounts.get("5001")
-
-        for v in vouchers:
-            # 分析每张凭证：现金科目的借方=流入，贷方=流出
-            cash_debit = sum(i.debit_amount for i in v.items if i.account_id in cash_acct_ids)
-            cash_credit = sum(i.credit_amount for i in v.items if i.account_id in cash_acct_ids)
-            other_acct_ids = {i.account_id for i in v.items if i.account_id not in cash_acct_ids}
-
-            if cash_debit > 0:
-                # 现金流入
-                if income_acct and income_acct.id in other_acct_ids:
-                    cash_in += cash_debit
-                else:
-                    cash_in += cash_debit  # 其他流入也算经营收入
-            if cash_credit > 0:
-                # 现金流出 - 根据对方科目分类
-                if salary_acct and salary_acct.id in other_acct_ids:
-                    cash_out_salary += cash_credit
-                elif tax_accts & other_acct_ids:
-                    cash_out_tax += cash_credit
-                else:
-                    cash_out_other += cash_credit
-
-    cf["c1"] = round(cash_in, 2)                                # 销售收到的现金
-    cf["c4"] = round(cash_out_salary, 2)                        # 支付职工薪酬
-    cf["c5"] = round(cash_out_tax, 2)                           # 支付税费
-    cf["c6"] = round(cash_out_other, 2)                         # 支付其他经营活动现金
-
-    # 累计 = 年初至今（简化：如果Q1则同本期）
-    cf["c1_acc"] = cf["c1"]
-    cf["c4_acc"] = cf["c4"]
-    cf["c5_acc"] = cf["c5"]
-    cf["c6_acc"] = cf["c6"]
-
-    # 期初现金
-    cf["c21"] = bal("3001")  # 简化：期初现金 ≈ 实收资本（首年）
-    cf["c21_acc"] = cf["c21"]
+    # 期初现金：年初现金余额（上年末）
+    cash_year_begin = float(bal_y("1001")) + float(bal_y("1002"))
+    cf["c21_acc"] = round(cash_year_begin, 2)
+    # 本季期初现金 = 年初现金 + 1月至上季末的现金净流量
+    if month_start > 1:
+        pre = _cashflow_for_period(year, 1, month_start - 1, accounts)
+        pre_net = pre["in"] - pre["salary"] - pre["tax"] - pre["other"]
+    else:
+        pre_net = 0.0
+    cf["c21"] = round(cash_year_begin + pre_net, 2)
 
     cf = calc_cashflow(cf)
 
@@ -333,6 +468,11 @@ def generate_report():
     }
 
     if request.method == "POST":
+        # 有阻断级问题时，不允许生成正式报表
+        if has_error:
+            flash("结账检查未通过，请先处理下方红色提示项后再生成报表。", "danger")
+            return redirect(url_for("closing.generate_report", year=year, quarter=quarter))
+
         # 创建或更新报表
         period_start = f"{year}-{month_start:02d}-01"
         m_end = month_end
@@ -344,6 +484,11 @@ def generate_report():
         existing = FinancialReport.query.filter_by(
             report_type="quarterly", year=year, quarter=quarter
         ).first()
+
+        if existing and existing.is_locked:
+            flash(f"{year}年第{quarter}季度报表已锁定（申报口径），不能覆盖。"
+                  f"如需重新生成，请先到预览页解锁。", "warning")
+            return redirect(url_for("report.review", report_id=existing.id))
 
         if existing:
             r = existing
@@ -364,4 +509,5 @@ def generate_report():
         return redirect(url_for("report.review", report_id=r.id))
 
     return render_template("closing_generate.html", preview=preview,
+                           checklist=checklist, has_error=has_error,
                            active_page="generate_report")

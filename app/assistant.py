@@ -1,7 +1,39 @@
 """自然语言填表助手 - 规则引擎
 解析用户描述的业务场景，生成三张报表的填写建议。
+支持工资记账场景：自动生成计提/发放/缴税凭证建议。
 """
 import re
+
+
+# ─── 个税累进税率表 ─────────────────────────────────
+TAX_BRACKETS = [
+    (36000,  0.03, 0),
+    (144000, 0.10, 2520),
+    (300000, 0.20, 16920),
+    (420000, 0.25, 31920),
+    (660000, 0.30, 52920),
+    (960000, 0.35, 85920),
+    (float('inf'), 0.45, 181920),
+]
+
+
+def calc_monthly_tax(monthly_salary, month_index, cumulative_income=0, cumulative_tax=0):
+    """计算累计预扣法下当月应扣个税
+    monthly_salary: 当月税前工资
+    month_index: 第几个月（从1开始）
+    cumulative_income: 之前累计收入
+    cumulative_tax: 之前累计已扣税
+    """
+    cum_income = cumulative_income + monthly_salary
+    cum_deduction = 5000 * month_index
+    taxable = max(cum_income - cum_deduction, 0)
+    cum_tax = 0
+    for threshold, rate, quick_deduction in TAX_BRACKETS:
+        if taxable <= threshold:
+            cum_tax = round(taxable * rate - quick_deduction, 2)
+            break
+    current_tax = max(round(cum_tax - cumulative_tax, 2), 0)
+    return current_tax, taxable, rate
 
 
 def parse_query(text):
@@ -28,6 +60,13 @@ def parse_query(text):
         "cash_paid_material": 0,  # 购买材料支付
         "has_invoice": True,   # 是否开票
         "invoice_type": "normal",  # 发票类型
+        # ── 工资记账场景 ──
+        "is_salary_scenario": False,  # 是否为纯工资记账问题
+        "salary_month": 0,           # 工资所属月份
+        "salary_year": 0,            # 工资所属年份
+        "employee_name": "",         # 员工姓名
+        "salary_months_worked": 1,   # 已工作月数（用于累计预扣）
+        "is_retired_rehire": False,   # 是否退休返聘
     }
 
     # 收入/合同/开票金额
@@ -63,14 +102,19 @@ def parse_query(text):
             info["capital"] = v
             info["cash_begin"] = v
 
-    # 工资
-    for pat in [r'(?:工资|薪酬|人工|员工工资)[^\d]*?([\d,.]+)\s*(?:万|w)?(?:元)?']:
+    # 工资（优先匹配"数字+工资"模式，避免误匹配远处的数字）
+    for pat in [
+        r'([\d,.]+)\s*(?:万|w)?(?:元)?\s*(?:的)?(?:工资|薪酬|月薪|薪资)',
+        r'(?:发[了放]|开了?|支付)\s*(?:了)?\s*([\d,.]+)\s*(?:万|w)?(?:元)?(?:的)?(?:工资|薪酬)',
+        r'(?:工资|薪酬|人工|员工工资|月薪|薪资)\s{0,3}([\d,.]+)\s*(?:万|w)?(?:元)?',
+    ]:
         m = re.search(pat, text)
         if m:
             v = float(m.group(1).replace(',', ''))
             if '万' in text[m.start():m.end()+2]:
                 v *= 10000
             info["salary"] = v
+            break
 
     # 房租
     for pat in [r'(?:房租|租金|办公室租金)[^\d]*?([\d,.]+)\s*(?:万|w)?(?:元)?']:
@@ -112,11 +156,127 @@ def parse_query(text):
     elif '收到' in text or '已收' in text or '款已到' in text:
         info["cash_received"] = info["income"]
 
+    # ── 工资记账场景检测 ──
+    salary_keywords = ['发工资', '发放工资', '开工资', '工资记账', '怎么记账',
+                       '如何记账', '工资入账', '计提工资', '雇员', '员工',
+                       '退休返聘', '返聘', '月薪', '薪资', '发了', '发放']
+    if info["salary"] > 0 and (
+        any(kw in text for kw in salary_keywords)
+        or (info["income"] == 0)  # 只提工资没提收入，默认是工资场景
+    ):
+        info["is_salary_scenario"] = True
+
+    # 退休返聘
+    if '退休' in text or '返聘' in text or '离退休' in text:
+        info["is_retired_rehire"] = True
+        info["is_salary_scenario"] = True
+
+    # 月份检测
+    m = re.search(r'(\d{1,2})\s*月', text)
+    if m:
+        info["salary_month"] = int(m.group(1))
+    m = re.search(r'(\d{4})\s*年', text)
+    if m:
+        info["salary_year"] = int(m.group(1))
+
+    # 工作月数
+    m = re.search(r'第\s*(\d+)\s*个月', text)
+    if m:
+        info["salary_months_worked"] = int(m.group(1))
+    elif re.search(r'入职|第一个月|首月|刚入职', text):
+        info["salary_months_worked"] = 1
+
     return info
+
+
+def _generate_salary_vouchers(info):
+    """生成工资记账的凭证建议"""
+    salary = info["salary"]
+    month_idx = info["salary_months_worked"]
+
+    # 模拟前几个月的累计（假设每月同薪）
+    cumulative_income = 0
+    cumulative_tax = 0
+    for m in range(1, month_idx):
+        t, _, _ = calc_monthly_tax(salary, m, cumulative_income, cumulative_tax)
+        cumulative_income += salary
+        cumulative_tax += t
+
+    # 计算当月个税
+    tax, taxable, rate = calc_monthly_tax(salary, month_idx, cumulative_income, cumulative_tax)
+    net_pay = round(salary - tax, 2)
+
+    vouchers = []
+
+    # 凭证1：计提工资
+    v1_items = [
+        {"account_code": "5602.01", "account_name": "管理费用-工资",
+         "summary": f"计提{info['salary_month'] or 'X'}月顾问工资",
+         "debit": salary, "credit": 0},
+        {"account_code": "2211", "account_name": "应付职工薪酬",
+         "summary": f"应付工资",
+         "debit": 0, "credit": net_pay},
+    ]
+    if tax > 0:
+        v1_items.append({
+            "account_code": "2221.02", "account_name": "应交税费-应交个人所得税",
+            "summary": "代扣个税",
+            "debit": 0, "credit": tax,
+        })
+    vouchers.append({
+        "title": "计提工资",
+        "notes": f"计提{info['salary_month'] or 'X'}月工资",
+        "entries": v1_items,
+    })
+
+    # 凭证2：发放工资
+    vouchers.append({
+        "title": "发放工资",
+        "notes": f"发放{info['salary_month'] or 'X'}月工资",
+        "entries": [
+            {"account_code": "2211", "account_name": "应付职工薪酬",
+             "summary": f"发放{info['salary_month'] or 'X'}月工资",
+             "debit": net_pay, "credit": 0},
+            {"account_code": "1002", "account_name": "银行存款",
+             "summary": f"发放{info['salary_month'] or 'X'}月工资",
+             "debit": 0, "credit": net_pay},
+        ],
+    })
+
+    # 凭证3：缴纳个税
+    if tax > 0:
+        vouchers.append({
+            "title": "缴纳个税",
+            "notes": f"缴纳{info['salary_month'] or 'X'}月代扣个人所得税",
+            "entries": [
+                {"account_code": "2221.02", "account_name": "应交税费-应交个人所得税",
+                 "summary": f"缴纳{info['salary_month'] or 'X'}月个税",
+                 "debit": tax, "credit": 0},
+                {"account_code": "1002", "account_name": "银行存款",
+                 "summary": f"缴纳{info['salary_month'] or 'X'}月个税",
+                 "debit": 0, "credit": tax},
+            ],
+        })
+
+    return {
+        "salary": salary,
+        "tax": tax,
+        "tax_rate": rate,
+        "taxable_income": taxable,
+        "net_pay": net_pay,
+        "vouchers": vouchers,
+        "month_index": month_idx,
+        "is_retired_rehire": info["is_retired_rehire"],
+    }
 
 
 def generate_suggestion(info):
     """根据解析结果生成三张表的填写建议"""
+    # 如果是工资记账场景，生成凭证建议
+    salary_detail = None
+    if info["is_salary_scenario"] and info["salary"] > 0:
+        salary_detail = _generate_salary_vouchers(info)
+
     income = info["income"]
     cost = info["cost"]
     capital = info["capital"]
@@ -239,6 +399,31 @@ def generate_suggestion(info):
         result["notes"].append("款项未收到，因此资产负债表中有应收账款，现金流量表中销售收到的现金为0。")
     if not cost and income:
         result["notes"].append("未提及成本，营业成本按0处理。如有实际成本请补充。")
-    result["notes"].append("第一季度：本期金额 = 本年累计金额，利润表和现金流量表两列填一样的数。")
+    if income:
+        result["notes"].append("第一季度：本期金额 = 本年累计金额，利润表和现金流量表两列填一样的数。")
+
+    # ── 工资记账场景：追加凭证建议和工资明细 ──
+    if salary_detail:
+        sd = salary_detail
+        result["salary_detail"] = sd
+        result["vouchers"] = sd["vouchers"]
+
+        # 追加工资专项摘要
+        result["summary"].insert(0, "── 工资记账分析 ──")
+        result["summary"].insert(1, f"税前工资：¥{sd['salary']:,.2f}")
+        result["summary"].insert(2, f"累计应纳税所得额：¥{sd['taxable_income']:,.2f}（适用税率 {sd['tax_rate']*100:.0f}%）")
+        result["summary"].insert(3, f"当月应扣个税：¥{sd['tax']:,.2f}")
+        result["summary"].insert(4, f"实发工资：¥{sd['net_pay']:,.2f}")
+        if sd["is_retired_rehire"]:
+            result["summary"].insert(5, "⚠ 退休返聘人员，按劳务报酬或工资薪金申报（建议咨询税务局确认）")
+
+        # 追加工资相关提示
+        result["notes"].append(
+            f"工资记账需要做{len(sd['vouchers'])}张凭证：计提工资、发放工资" +
+            ("、缴纳个税。" if sd["tax"] > 0 else "。（本月无需代扣个税）")
+        )
+        result["notes"].append("个税采用累计预扣法，每月可扣减5,000元费用。年度累计应纳税所得额≤36,000适用3%税率。")
+        if sd["is_retired_rehire"]:
+            result["notes"].append("退休返聘人员不缴社保，但个税照常代扣代缴。用工关系按劳务合同或返聘协议处理。")
 
     return result
